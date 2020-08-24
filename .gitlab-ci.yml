@@ -3,7 +3,7 @@ stages:
 topog:
   stage: topog
   tags:
-    - pan
+    - gfdl
   timeout: 2 hours 0 minutes
   before_script:
     - test -f Miniconda3-latest-Linux-x86_64.sh || wget -nv http://anaconda.rdhpcs.noaa.gov/miniconda/Miniconda3-latest-Linux-x86_64.sh
