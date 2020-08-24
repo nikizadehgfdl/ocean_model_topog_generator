@@ -1,6 +1,6 @@
 stages:
   - topog
-bathy:
+topog:
   stage: topog
   tags:
     - pan
