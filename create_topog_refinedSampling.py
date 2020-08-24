@@ -421,7 +421,7 @@ def main(argv):
     print(" Periodicity test  : ", height_refsamp[0,0] , height_refsamp[0,-1])
     print(" Periodicity break : ", (np.abs(height_refsamp[:,0]- height_refsamp[:,-1])).max() )
     toc = time.perf_counter()
-    print("It took {toc - tic:0.4f} seconds on platform ",host)
+    print(f"It took {toc - tic:0.4f} seconds on platform ",host)
 
     if(plotem):
         import matplotlib.pyplot as plt
