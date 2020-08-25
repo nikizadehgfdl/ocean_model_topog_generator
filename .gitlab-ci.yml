@@ -6,24 +6,9 @@ topog:
     - gfdl
   timeout: 2 hours 0 minutes
   before_script:
-    - test -f Miniconda3-latest-Linux-x86_64.sh || wget -nv http://anaconda.rdhpcs.noaa.gov/miniconda/Miniconda3-latest-Linux-x86_64.sh
-    - bash Miniconda3-latest-Linux-x86_64.sh -b -p `pwd`/local_env
-    - export PATH=`pwd`/local_env/bin:$PATH
-    - hash -r
-    - conda config --set always_yes yes --set changeps1 no
-    - conda update -q conda
-    - conda info -a
-    - conda env create --file repro-pan.yml
-    - . activate repro
-    - conda list -e
+    - module unload python
+    - module load python/3.6.4
   script:
-    - export PATH=`pwd`/local_env/bin:$PATH
-    - export PATH=`pwd`/local_env/envs/repro/bin:$PATH
-    - . activate repro
-    - python -m ipykernel install --user --name repro --display-name "Py3-repro"
-    - conda info -e
-    # niki's notebook/script
-    #- papermill OM4p125_edit_topo.ipynb output_step2.ipynb
-    #- papermill bedmachine_iceshelves_mask.ipynb output_step3.ipynb
+    - pwd
     - create_topog_refinedSampling.py --hgridfilename /work/Niki.Zadeh/MOM6-examples_myfork/ice_ocean_SIS2/OM4_0125/preprocessing_test/ocean_hgrid.ncSO.nc --outputfilename topog_SO.nc --source_file /archive/gold/datasets/topography/GEBCO_2020/GEBCO_2020.nc --source_lon lon --source_lat lat --source_elv elevation 
     - md5sum -c checksums.txt
