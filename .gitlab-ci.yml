@@ -8,7 +8,7 @@ topog:
   before_script:
     - module unload python
     - module load python/3.6.4
+    - module load git
   script:
     - pwd
-    - create_topog_refinedSampling.py --hgridfilename /work/Niki.Zadeh/MOM6-examples_myfork/ice_ocean_SIS2/OM4_0125/preprocessing_test/ocean_hgrid.ncSO.nc --outputfilename topog_SO.nc --source_file /archive/gold/datasets/topography/GEBCO_2020/GEBCO_2020.nc --source_lon lon --source_lat lat --source_elv elevation 
-    - md5sum -c checksums.txt
+    - make test

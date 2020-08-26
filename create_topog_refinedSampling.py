@@ -334,7 +334,7 @@ def main(argv):
     source =""
     if(not no_changing_meta):
         source =  source + scriptpath + " had git hash " + scriptgithash + scriptgitMod 
-        source =  source + ". To obtain the grid generating code do: git clone  https://github.com/nikizadehgfdl/thin-wall-topography.git ; cd thin-wall-topography;  git checkout "+scriptgithash
+        source =  source + ". To obtain the grid generating code do: git clone  https://github.com/nikizadehgfdl/ocean_model_topog_generator.git ; cd ocean_model_topog_generator;  git checkout "+scriptgithash
 
     #Time it
     tic = time.perf_counter()
