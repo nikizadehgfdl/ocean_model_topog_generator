@@ -10,5 +10,5 @@ topog:
     - module load python/3.6.4
     - module load git
   script:
-    - pwd
+    - cd OMtopogen; pwd
     - make test
