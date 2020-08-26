@@ -2,10 +2,16 @@
 
 import sys, getopt
 import datetime, os, subprocess
-from OMtopogen import GMesh
 import imp
 import netCDF4
 import numpy as np
+try:
+    from OMtopogen import GMesh
+except:
+    if os.path.exists('GMesh.py'):
+        import GMesh
+    else:
+        raise ImportError("GMesh.py not found, either install package or run within directory")
 
 def write_topog(h,hstd,hmin,hmax,hx,hy,fnam=None,format='NETCDF3_CLASSIC',description=None,history=None,source=None,no_changing_meta=None):
     import netCDF4 as nc
