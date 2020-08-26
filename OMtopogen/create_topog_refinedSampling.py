@@ -2,10 +2,16 @@
 
 import sys, getopt
 import datetime, os, subprocess
-import GMesh
 import imp
 import netCDF4
 import numpy as np
+try:
+    from OMtopogen import GMesh
+except:
+    if os.path.exists('GMesh.py'):
+        import GMesh
+    else:
+        raise ImportError("GMesh.py not found, either install package or run within directory")
 
 def break_array_to_blocks(a,xb=4,yb=1):
     a_win = []
@@ -14,24 +20,24 @@ def break_array_to_blocks(a,xb=4,yb=1):
         i2 = 2*i1
         i3 = 3*i1
         i4 = a.shape[1]
-        
+
         j1 = a.shape[0]//yb
         a_win.append(a[0:j1,0:i1])
         a_win.append(a[0:j1,i1:i2])
         a_win.append(a[0:j1,i2:i3])
         a_win.append(a[0:j1,i3:i4])
         return a_win
-    else:    
+    else:
         raise Exception('This rotuine can only make 2x2 blocks!')
         ##Niki: Implement a better algo and lift this restriction
 
-def undo_break_array_to_blocks(a,xb=4,yb=1):    
-    if(xb == 4 and yb ==1):        
+def undo_break_array_to_blocks(a,xb=4,yb=1):
+    if(xb == 4 and yb ==1):
         ao = np.append(a[0],a[1],axis=1)
         ao = np.append(ao,a[2],axis=1)
         ao = np.append(ao,a[3],axis=1)
         return ao
-    else:    
+    else:
         raise Exception('This rotuine can only make 2x2 blocks!')
         ##Niki: Implement a better algo and lift this restriction
 
@@ -47,7 +53,7 @@ def write_topog(h,hstd,hmin,hmax,xx,yy,fnam=None,format='NETCDF3_CLASSIC',descri
 
     ny=fout.createDimension('ny',ny)
     nx=fout.createDimension('nx',nx)
-    string=fout.createDimension('string',255)    
+    string=fout.createDimension('string',255)
     tile=fout.createVariable('tile','S1',('string'))
     height=fout.createVariable('height','f8',('ny','nx'))
     height.units='meters'
@@ -55,7 +61,7 @@ def write_topog(h,hstd,hmin,hmax,xx,yy,fnam=None,format='NETCDF3_CLASSIC',descri
     wet=fout.createVariable('wet','f8',('ny','nx'))
     wet.units='none'
     wet[:]=np.where(h<0.,1.0,0.0)
-    
+
     h_std=fout.createVariable('h_std','f8',('ny','nx'))
     h_std.units='meters'
     h_std[:]=hstd
@@ -179,7 +185,7 @@ def do_block(part,lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=8000):
     # Indices in topographic data
     ti,tj = target_mesh.find_nn_uniform_source( topo_lons, topo_lats )
 
-    #Sample every other source points 
+    #Sample every other source points
     ##Niki: This is only for efficeincy and we want to remove the constraint for the final product.
     ##Niki: But in some cases it may not work!
     #tis,tjs = slice(ti.min(), ti.max()+1,2), slice(tj.min(), tj.max()+1,2)
@@ -199,7 +205,7 @@ def do_block(part,lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=8000):
     print("  Target     longitude range:", lon.min(),lon.max())
     print("  Target     latitude  range:", lat.min(),lat.max())
 
-    # Refine grid by 2 till all source points are hit 
+    # Refine grid by 2 till all source points are hit
     print("  Refining the target to hit all source points ...")
     Glist = target_mesh.refine_loop( topo_lon, topo_lat , max_mb=max_mb);
     hits = Glist[-1].source_hits( topo_lon, topo_lat )
@@ -214,7 +220,7 @@ def do_block(part,lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=8000):
     print("  Coarsening back to the original taget grid ...")
     for i in reversed(range(1,len(Glist))):   # 1, makes it stop at element 1 rather than 0
         Glist[i].coarsenby2(Glist[i-1])
-    
+
     print("Roughness calculation via plane fit")
     #Roughness calculation by plane fitting
     #Calculate the slopes of the planes on the coarsest (model) grid cells
@@ -237,7 +243,7 @@ def do_block(part,lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=8000):
     betadrf=refine_by_repeat(betad,rf)
     denomrf=refine_by_repeat(denom,rf)
     #The refined mesh has a shape of (2*nj-1,2*ni-1) rather than (2*nj,2*ni) and hence
-    #is missing the last row/column by construction! 
+    #is missing the last row/column by construction!
     #So, the finest mesh does not have (rf*nj,rf*ni) points but is smaller by ...
     #Bring it to the same shape as (rf*nj,rf*ni) by padding with zeros.
     #This is for algorithm convenience and we remove the contribution of them later.
@@ -259,7 +265,7 @@ def do_block(part,lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=8000):
 
     print("")
     #print("Writing ...")
-    #filename = 'topog_refsamp_BP.nc'+str(b) 
+    #filename = 'topog_refsamp_BP.nc'+str(b)
     #write_topog(Glist[0].height,fnam=filename,no_changing_meta=True)
     #print("haigts shape:", lons[b].shape,Hlist[b].shape)
     return Glist[0].height,D_std,Glist[0].h_min,Glist[0].h_max, hits
@@ -290,7 +296,7 @@ def main(argv):
         print(err)
         usage(scriptbasename)
         sys.exit(2)
-        
+
     for opt, arg in opts:
         if opt == '-h':
             usage()
@@ -330,7 +336,7 @@ def main(argv):
         hist = hist + " on "+ str(datetime.date.today()) + " on platform "+ host
 
     desc = "This is a model topography file generated by the refine-sampling method from source topography. "
-    
+
     source =""
     if(not no_changing_meta):
         source =  source + scriptpath + " had git hash " + scriptgithash + scriptgitMod 
@@ -366,7 +372,7 @@ def main(argv):
     targ_grid =  netCDF4.Dataset(gridfilename)
     targ_lon = np.array(targ_grid.variables['x'])
     targ_lat = np.array(targ_grid.variables['y'])
-    #x and y have shape (nyp,nxp). Topog does not need the last col for global grids (period in x). 
+    #x and y have shape (nyp,nxp). Topog does not need the last col for global grids (period in x).
     targ_lon = targ_lon[:,:-1]
     targ_lat = targ_lat[:,:-1]
     print(" Target mesh shape: ",targ_lon.shape)
@@ -377,7 +383,7 @@ def main(argv):
     if(not status1 or not status2):
         print(' shifting topo data to start at target lon')
         topo_lons = np.roll(topo_lons,-illc,axis=0) #Roll data longitude to right
-        topo_lons = np.where(topo_lons>=topo_lons[0] , topo_lons-360, topo_lons) #Rename (0,60) as (-300,-180) 
+        topo_lons = np.where(topo_lons>=topo_lons[0] , topo_lons-360, topo_lons) #Rename (0,60) as (-300,-180)
         topo_elvs = np.roll(topo_elvs,-illc,axis=1) #Roll data depth to the right by the same amount.
 
     print(' topography grid array shapes: ' , topo_lons.shape,topo_lats.shape)
