@@ -1,5 +1,6 @@
 TARGS = ocean_hgrid_res4.0.nc \
         ocean_hgrid_res1.0.nc \
+        ocean_hgrid_res1.0_equenh.nc \
         ocean_hgrid_res0.5.nc \
         ocean_hgrid_res0.5_equenh.nc \
         ocean_hgrid_res0.25.nc \
@@ -26,6 +27,8 @@ ocean_hgrid_res4.0.nc:
 	time ./ocean_grid_generator.py $(DEBUG) -f ocean_hgrid_res4.0.nc -r 0.25 --even_j --no_changing_meta
 ocean_hgrid_res1.0.nc:
 	time ./ocean_grid_generator.py $(DEBUG) -f ocean_hgrid_res1.0.nc -r 1.0  --south_cutoff_row 2 --no_changing_meta
+ocean_hgrid_res1.0_equenh.nc:
+	time ./ocean_grid_generator.py $(DEBUG) -f ocean_hgrid_res1.0_equenh.nc -r 1.0 --rdp 0 --enhanced_equatorial --no_changing_meta
 ocean_hgrid_res0.5.nc: 
 	time ./ocean_grid_generator.py $(DEBUG) -f ocean_hgrid_res0.5.nc -r 2    --no_changing_meta 
 ocean_hgrid_res0.5_equenh.nc: 
