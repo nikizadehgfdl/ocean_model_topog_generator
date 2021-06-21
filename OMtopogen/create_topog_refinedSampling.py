@@ -369,13 +369,14 @@ def main(argv):
         j1,i1=15616, 39166 #get_indices1D(topo_lons, topo_lats ,26.39, 40.14)
         topo_elvs[j1+1,i1]=topo_elvs[j1,i1]
     #Read a target grid
+    print("\nReading target grid from: {}\n".format(gridfilename))
     targ_grid =  netCDF4.Dataset(gridfilename)
     targ_lon = np.array(targ_grid.variables['x'])
     targ_lat = np.array(targ_grid.variables['y'])
     #x and y have shape (nyp,nxp). Topog does not need the last col for global grids (period in x).
     targ_lon = targ_lon[:,:-1]
     targ_lat = targ_lat[:,:-1]
-    print(" Target mesh shape: ",targ_lon.shape)
+    print(" Target mesh shape (nyp, nxp): ",targ_lon.shape)
     #Translate topo data to start at target_mesh.lon_m[0]
     #Why/When?
     jllc,illc,status1=get_indices1D(topo_lons, topo_lats ,targ_lon[0,0] ,targ_lat[0,0])
