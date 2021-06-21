@@ -368,14 +368,14 @@ def main(argv):
         #Dardanells' constrict
         j1,i1=15616, 39166 #get_indices1D(topo_lons, topo_lats ,26.39, 40.14)
         topo_elvs[j1+1,i1]=topo_elvs[j1,i1]
-    #Read a target grid
+    #Read a target grid from mosaic file
     print("\nReading target grid from: {}\n".format(gridfilename))
     targ_grid =  netCDF4.Dataset(gridfilename)
     targ_lon = np.array(targ_grid.variables['x'])
     targ_lat = np.array(targ_grid.variables['y'])
     #x and y have shape (nyp,nxp). Topog does not need the last col for global grids (period in x).
-    targ_lon = targ_lon[:,:-1]
-    targ_lat = targ_lat[:,:-1]
+    targ_lon = targ_lon[:][::2,::2]
+    targ_lat = targ_lat[:][::2,::2]
     print(" Target mesh shape (nyp, nxp): ",targ_lon.shape)
     #Translate topo data to start at target_mesh.lon_m[0]
     #Why/When?
