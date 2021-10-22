@@ -92,13 +92,31 @@ def applyIce9(fileName, nFileName, variable, i0, j0, shallow, analyze):
   rgWet.description = 'Values: 1=Ocean, 0=Land'
   rgWet[:] = notLand # + (1-notLand)*0.3*np.where( depth<0, 1, 0)
 
-  rgDepth[:] = -depth*notLand # Change sign here. Until this point depth has actually been elevation.
+  rgDepth[:] = np.where(depth<0, -depth*notLand, 0) # Change sign here. Until this point depth has actually been elevation.
 
-  if 'std' in iRg.variables: # Need to copy over list of edits
+  if 'h2' in iRg.variables: # Need to copy over list of edits
     rgH2 = rg.createVariable('h2','f4',('ny','nx'))
     rgH2.units = iDepth.units+'^2'
     rgH2.standard_name = 'Variance of sub-grid scale topography'
-    rgH2[:] = iRg.variables['std'][:]**2
+    rgH2[:] = iRg.variables['h2'][:]
+
+  if 'h_std' in iRg.variables: # Need to copy over list of edits
+    rgHstd = rg.createVariable('h_std','f4',('ny','nx'))
+    rgHstd.units = iDepth.units
+    rgHstd.standard_name = 'Standard deviation of sub-grid scale topography in grid cell'
+    rgHstd[:] = iRg.variables['h_std'][:]
+
+  if 'h_min' in iRg.variables: # Need to copy over list of edits
+    rgHmin = rg.createVariable('h_min','f4',('ny','nx'))
+    rgHmin.units = iDepth.units
+    rgHmin.standard_name = 'Minimum topography height data in grid cell'
+    rgHmin[:] = iRg.variables['h_min'][:]
+
+  if 'h_max' in iRg.variables: # Need to copy over list of edits
+    rgHmax = rg.createVariable('h_max','f4',('ny','nx'))
+    rgHmax.units = iDepth.units
+    rgHmax.standard_name = 'Maximum topography height data in grid cell'
+    rgHmax[:] = iRg.variables['h_max'][:]
 
   if 'zEdit' in iRg.variables: # Need to copy over list of edits
     rgMod = rg.createVariable('modified_mask','f4',('ny','nx'))

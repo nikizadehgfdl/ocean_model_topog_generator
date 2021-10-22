@@ -29,7 +29,7 @@ def write_topog(h,hstd,hmin,hmax,hx,hy,fnam=None,format='NETCDF3_CLASSIC',descri
     depth=fout.createVariable('depth','f8',('ny','nx'))
     depth.units='meters'
     depth.description = 'Non-negative nominal thickness of the ocean at cell centers'
-    depth[:]=-h
+    depth[:]=np.where(h>0, 0.0, -h) #-h
     height=fout.createVariable('height','f8',('ny','nx'))
     height.units='meters'
     height.description = 'Mean topography height data at grid cell'
