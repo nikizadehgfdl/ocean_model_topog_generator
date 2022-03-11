@@ -13,7 +13,7 @@ all: $(TARGS) hash.md5
 test: $(TARGS)
 	cat hash.md5
 	md5sum -c hash.md5
-	make clean
+#	make clean
 #Note: --no_changing_meta arg is used to avoid putting time/platform dependent info in the files so that they can  be checksumed.
 #      Please do not use this arg for normal grid generation, it prevents adding useful information to meta data.
 ocean_topog_res0.125_SO.nc:
