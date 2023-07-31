@@ -15,31 +15,26 @@ except:
 
 def break_array_to_blocks(a,xb=4,yb=1):
     a_win = []
-    if(xb == 4 and yb ==1):
-        i1 = a.shape[1]//xb
-        i2 = 2*i1
-        i3 = 3*i1
-        i4 = a.shape[1]
-
+    if(yb ==1):
         j1 = a.shape[0]//yb
-        a_win.append(a[0:j1,0:i1])
-        a_win.append(a[0:j1,i1:i2])
-        a_win.append(a[0:j1,i2:i3])
-        a_win.append(a[0:j1,i3:i4])
+        i0 = 0
+        lx = a.shape[1]//xb
+        for k in range(xb):
+            i1=min(a.shape[1],i0+lx)
+            a_win.append(a[0:j1,i0:i1])
+            i0=i1
         return a_win
     else:
-        raise Exception('This rotuine can only make 2x2 blocks!')
-        ##Niki: Implement a better algo and lift this restriction
+        raise Exception('This rotuine can only make blocks in x-dir!')
 
 def undo_break_array_to_blocks(a,xb=4,yb=1):
-    if(xb == 4 and yb ==1):
-        ao = np.append(a[0],a[1],axis=1)
-        ao = np.append(ao,a[2],axis=1)
-        ao = np.append(ao,a[3],axis=1)
+    if(yb ==1):
+        ao = a[0]
+        for i in range(1,len(a)):
+            ao = np.append(ao,a[i],axis=1)
         return ao
     else:
-        raise Exception('This rotuine can only make 2x2 blocks!')
-        ##Niki: Implement a better algo and lift this restriction
+        raise Exception('This rotuine can only make blocks in x-dir!')
 
 def write_topog(h,hstd,hmin,hmax,xx,yy,fnam=None,format='NETCDF3_CLASSIC',description=None,history=None,source=None,no_changing_meta=None):
     import netCDF4 as nc
@@ -396,13 +391,12 @@ def main(argv):
     #Is this a regular mesh?
     # if( .NOT. is_mesh_regular() ) throw
 
-    #Niki: Why 4,1 partition?
-    xb=4
+    xb=8
     yb=1
     lons=break_array_to_blocks(targ_lon,xb,yb)
     lats=break_array_to_blocks(targ_lat,xb,yb)
 
-    #We must loop over the 4 partitions
+    #We must loop over the partitions
     Hlist=[]
     Hstdlist=[]
     Hminlist=[]
@@ -410,6 +404,7 @@ def main(argv):
     for part in range(0,xb):
         lon = lons[part]
         lat = lats[part]
+        print("  Doing block number ",part+1," of ",xb," .................")
         h,hstd,hmin,hmax,hits = do_block(part,lon,lat,topo_lons,topo_lats,topo_elvs)
         Hlist.append(h)
         Hstdlist.append(hstd)

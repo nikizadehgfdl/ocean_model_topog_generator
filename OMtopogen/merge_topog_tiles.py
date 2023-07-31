@@ -194,8 +194,9 @@ def main(argv):
     #h_std =  h_std[:-1:2,:-1:2]
     #h_max =  h_max[:-1:2,:-1:2]
     #h_min =  h_min[:-1:2,:-1:2]
-    #No, this is wrong! Loses information. We can do better:
+    #No, this is wrong! Loses information. We can do a 4 point average:
     height= 0.25*(height[:-1:2,:-1:2]+height[1::2,1::2]+height[1::2,0:-1:2]+height[0:-1:2,1::2])
+
     h_std = np.maximum(h_std[:-1:2,:-1:2],h_std[1::2,1::2]) #??
     h_max = np.maximum(h_max[:-1:2,:-1:2],h_max[1::2,1::2])
     h_min = np.minimum(h_min[:-1:2,:-1:2],h_min[1::2,1::2])
@@ -203,7 +204,7 @@ def main(argv):
     h_x = h_x[:-1:2,::2]
     h_y = h_y[:-1:2,::2]
 
-    print("shapes: ",h_min.shape,h_x.shape,h_y.shape)
+    print("shapes: ",height.shape,h_min.shape,h_x.shape,h_y.shape)
     write_topog(height,h_std,h_min,h_max,h_x,h_y,fnam=outputfilename,description=desc,history=hist,source=source,no_changing_meta=no_changing_meta)
 
 
