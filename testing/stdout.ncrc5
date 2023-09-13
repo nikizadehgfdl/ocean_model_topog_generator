@@ -1,0 +1,337 @@
+time ../OMtopogen/create_topog_refinedSampling.py --hgridfilename ./dataset/ocean_hgrid.Merc.4deg.nc --nxblocks=1 --max_refine=3 --source_file ./dataset/GEBCO_2014_2D.nc --source_lon lon --source_lat lat --source_elv elevation --outputfilename ocean_topog.Merc.4deg_r3b1h1.nc --no_changing_meta
+
+Generatin model topography for target grid  ./dataset/ocean_hgrid.Merc.4deg.nc
+ Target mesh shape:  (87, 180)
+ wanted:  -300.0 -66.51326044311185
+ got:     59.99583333333334 -66.5125
+  bad
+ j,i= 2818 28799
+ wanted:  58.0 63.11375440256549
+ got:     57.99583333333334 63.1125
+  good
+ j,i= 18373 28559
+ shifting topo data to start at target lon
+ wanted:  -300.0 -66.51326044311185
+ got:     -300.00416666666666 -66.5125
+  good
+ j,i= 2818 0
+ wanted:  58.0 63.11375440256549
+ got:     57.99583333333334 63.1125
+  good
+ j,i= 18373 42960
+ halo size= 1
+ topography grid array shapes:  (43222,) (21600,)
+ topography longitude min&max: -300.0958333333333 60.07916666666665
+ topography longitude 0,1,-2,-1: -300.0958333333333 -300.0875 60.070833333333326 60.07916666666665
+ topography latitude range: -89.99583333333332 89.99583333333334
+ Is mesh uniform? True
+Doing block  0
+Target lon lat extents  -302.0 60.0 -66.51326044311185 63.11375440256549
+  Target sub mesh shape:  (87, 182)
+  Slices j,i: slice(2818, 18374, 1) slice(0, 43223, 1)
+  Topo shape: (15556, 43222)
+  topography longitude range: -300.0958333333333 60.07916666666665
+  topography latitude  range: -66.5125 63.1125
+  Target     longitude range: -302.0 60.0
+  Target     latitude  range: -66.51326044311185 63.11375440256549
+  Refining the target to hit all source points ...
+<GMesh nj:86 ni:181 shape:(86,181)> Hit 15660 out of 672361432 cells (0.2375 Mb)
+<GMesh nj:172 ni:362 shape:(172,362)> Hit 62280 out of 672361432 cells (0.9501 Mb)
+<GMesh nj:344 ni:724 shape:(344,724)> Hit 248400 out of 672361432 cells (3.8003 Mb)
+Warning: Maximum number of allowed refinements reached without all source cells hit.
+  non-hit ratio:  672113032  /  672361432
+  Sampling the source points on target mesh ...
+  Coarsening back to the original taget grid ...
+Roughness calculation via plane fit
+
+ Merging the blocks ...
+ Total non-hit ratio:  672081920  /  672330320
+ Target mesh shape:  (87, 180) (87, 180)
+Writing netcdf file  ocean_topog.Merc.4deg_r3b1h1.nc  with ny,nx=  87 180
+ Periodicity test  :  -2605.8125 -1983.875
+ Periodicity break :  3138.0625
+It took 11.8727 seconds on platform  c5n0767
+time ../OMtopogen/create_topog_refinedSampling.py --hgridfilename ./dataset/ocean_hgrid.Merc.4deg.nc --nxblocks=2 --max_refine=3 --source_file ./dataset/GEBCO_2014_2D.nc --source_lon lon --source_lat lat --source_elv elevation --outputfilename ocean_topog.Merc.4deg_r3b2h1.nc --no_changing_meta
+
+Generatin model topography for target grid  ./dataset/ocean_hgrid.Merc.4deg.nc
+ Target mesh shape:  (87, 180)
+ wanted:  -300.0 -66.51326044311185
+ got:     59.99583333333334 -66.5125
+  bad
+ j,i= 2818 28799
+ wanted:  58.0 63.11375440256549
+ got:     57.99583333333334 63.1125
+  good
+ j,i= 18373 28559
+ shifting topo data to start at target lon
+ wanted:  -300.0 -66.51326044311185
+ got:     -300.00416666666666 -66.5125
+  good
+ j,i= 2818 0
+ wanted:  58.0 63.11375440256549
+ got:     57.99583333333334 63.1125
+  good
+ j,i= 18373 42960
+ halo size= 1
+ topography grid array shapes:  (43222,) (21600,)
+ topography longitude min&max: -300.0958333333333 60.07916666666665
+ topography longitude 0,1,-2,-1: -300.0958333333333 -300.0875 60.070833333333326 60.07916666666665
+ topography latitude range: -89.99583333333332 89.99583333333334
+ Is mesh uniform? True
+Doing block  0
+Target lon lat extents  -302.0 -120.0 -66.51326044311185 63.11375440256549
+  Target sub mesh shape:  (87, 92)
+  Slices j,i: slice(2818, 18374, 1) slice(0, 43223, 1)
+  Topo shape: (15556, 43222)
+  topography longitude range: -300.0958333333333 60.07916666666665
+  topography latitude  range: -66.5125 63.1125
+  Target     longitude range: -302.0 -120.0
+  Target     latitude  range: -66.51326044311185 63.11375440256549
+  Refining the target to hit all source points ...
+<GMesh nj:86 ni:91 shape:(86,91)> Hit 8004 out of 672361432 cells (0.1194 Mb)
+<GMesh nj:172 ni:182 shape:(172,182)> Hit 31659 out of 672361432 cells (0.4777 Mb)
+<GMesh nj:344 ni:364 shape:(344,364)> Hit 125925 out of 672361432 cells (1.9106 Mb)
+Warning: Maximum number of allowed refinements reached without all source cells hit.
+  non-hit ratio:  672235507  /  672361432
+  Sampling the source points on target mesh ...
+  Coarsening back to the original taget grid ...
+Roughness calculation via plane fit
+
+Doing block  1
+Target lon lat extents  -122.0 60.0 -66.51326044311185 63.11375440256549
+  Target sub mesh shape:  (87, 92)
+  Slices j,i: slice(2818, 18374, 1) slice(0, 43223, 1)
+  Topo shape: (15556, 43222)
+  topography longitude range: -300.0958333333333 60.07916666666665
+  topography latitude  range: -66.5125 63.1125
+  Target     longitude range: -122.0 60.0
+  Target     latitude  range: -66.51326044311185 63.11375440256549
+  Refining the target to hit all source points ...
+<GMesh nj:86 ni:91 shape:(86,91)> Hit 8004 out of 672361432 cells (0.1194 Mb)
+<GMesh nj:172 ni:182 shape:(172,182)> Hit 31659 out of 672361432 cells (0.4777 Mb)
+<GMesh nj:344 ni:364 shape:(344,364)> Hit 125925 out of 672361432 cells (1.9106 Mb)
+Warning: Maximum number of allowed refinements reached without all source cells hit.
+  non-hit ratio:  672235507  /  672361432
+  Sampling the source points on target mesh ...
+  Coarsening back to the original taget grid ...
+Roughness calculation via plane fit
+
+ Merging the blocks ...
+ Total non-hit ratio:  1344408790  /  1344660640
+ Target mesh shape:  (87, 180) (87, 180)
+Writing netcdf file  ocean_topog.Merc.4deg_r3b2h1.nc  with ny,nx=  87 180
+ Periodicity test  :  -2605.8125 -1983.875
+ Periodicity break :  3138.0625
+It took 16.0886 seconds on platform  c5n0767
+time ../OMtopogen/create_topog_refinedSampling.py --hgridfilename ./dataset/ocean_hgrid.Merc.4deg.nc --nxblocks=4 --max_refine=3 --source_file ./dataset/GEBCO_2014_2D.nc --source_lon lon --source_lat lat --source_elv elevation --outputfilename ocean_topog.Merc.4deg_r3b4h1.nc --no_changing_meta
+
+Generatin model topography for target grid  ./dataset/ocean_hgrid.Merc.4deg.nc
+ Target mesh shape:  (87, 180)
+ wanted:  -300.0 -66.51326044311185
+ got:     59.99583333333334 -66.5125
+  bad
+ j,i= 2818 28799
+ wanted:  58.0 63.11375440256549
+ got:     57.99583333333334 63.1125
+  good
+ j,i= 18373 28559
+ shifting topo data to start at target lon
+ wanted:  -300.0 -66.51326044311185
+ got:     -300.00416666666666 -66.5125
+  good
+ j,i= 2818 0
+ wanted:  58.0 63.11375440256549
+ got:     57.99583333333334 63.1125
+  good
+ j,i= 18373 42960
+ halo size= 1
+ topography grid array shapes:  (43222,) (21600,)
+ topography longitude min&max: -300.0958333333333 60.07916666666665
+ topography longitude 0,1,-2,-1: -300.0958333333333 -300.0875 60.070833333333326 60.07916666666665
+ topography latitude range: -89.99583333333332 89.99583333333334
+ Is mesh uniform? True
+Doing block  0
+Target lon lat extents  -302.0 -210.0 -66.51326044311185 63.11375440256549
+  Target sub mesh shape:  (87, 47)
+  Slices j,i: slice(2818, 18374, 1) slice(0, 43223, 1)
+  Topo shape: (15556, 43222)
+  topography longitude range: -300.0958333333333 60.07916666666665
+  topography latitude  range: -66.5125 63.1125
+  Target     longitude range: -302.0 -210.0
+  Target     latitude  range: -66.51326044311185 63.11375440256549
+  Refining the target to hit all source points ...
+<GMesh nj:86 ni:46 shape:(86,46)> Hit 4089 out of 672361432 cells (0.0604 Mb)
+<GMesh nj:172 ni:92 shape:(172,92)> Hit 16089 out of 672361432 cells (0.2415 Mb)
+<GMesh nj:344 ni:184 shape:(344,184)> Hit 63825 out of 672361432 cells (0.9658 Mb)
+Warning: Maximum number of allowed refinements reached without all source cells hit.
+  non-hit ratio:  672297607  /  672361432
+  Sampling the source points on target mesh ...
+  Coarsening back to the original taget grid ...
+Roughness calculation via plane fit
+
+Doing block  1
+Target lon lat extents  -212.0 -120.0 -66.51326044311185 63.11375440256549
+  Target sub mesh shape:  (87, 47)
+  Slices j,i: slice(2818, 18374, 1) slice(0, 43223, 1)
+  Topo shape: (15556, 43222)
+  topography longitude range: -300.0958333333333 60.07916666666665
+  topography latitude  range: -66.5125 63.1125
+  Target     longitude range: -212.0 -120.0
+  Target     latitude  range: -66.51326044311185 63.11375440256549
+  Refining the target to hit all source points ...
+<GMesh nj:86 ni:46 shape:(86,46)> Hit 4089 out of 672361432 cells (0.0604 Mb)
+<GMesh nj:172 ni:92 shape:(172,92)> Hit 16089 out of 672361432 cells (0.2415 Mb)
+<GMesh nj:344 ni:184 shape:(344,184)> Hit 63825 out of 672361432 cells (0.9658 Mb)
+Warning: Maximum number of allowed refinements reached without all source cells hit.
+  non-hit ratio:  672297607  /  672361432
+  Sampling the source points on target mesh ...
+  Coarsening back to the original taget grid ...
+Roughness calculation via plane fit
+
+Doing block  2
+Target lon lat extents  -122.0 -30.0 -66.51326044311185 63.11375440256549
+  Target sub mesh shape:  (87, 47)
+  Slices j,i: slice(2818, 18374, 1) slice(0, 43223, 1)
+  Topo shape: (15556, 43222)
+  topography longitude range: -300.0958333333333 60.07916666666665
+  topography latitude  range: -66.5125 63.1125
+  Target     longitude range: -122.0 -30.0
+  Target     latitude  range: -66.51326044311185 63.11375440256549
+  Refining the target to hit all source points ...
+<GMesh nj:86 ni:46 shape:(86,46)> Hit 4089 out of 672361432 cells (0.0604 Mb)
+<GMesh nj:172 ni:92 shape:(172,92)> Hit 16089 out of 672361432 cells (0.2415 Mb)
+<GMesh nj:344 ni:184 shape:(344,184)> Hit 63825 out of 672361432 cells (0.9658 Mb)
+Warning: Maximum number of allowed refinements reached without all source cells hit.
+  non-hit ratio:  672297607  /  672361432
+  Sampling the source points on target mesh ...
+  Coarsening back to the original taget grid ...
+Roughness calculation via plane fit
+
+Doing block  3
+Target lon lat extents  -32.0 60.0 -66.51326044311185 63.11375440256549
+  Target sub mesh shape:  (87, 47)
+  Slices j,i: slice(2818, 18374, 1) slice(0, 43223, 1)
+  Topo shape: (15556, 43222)
+  topography longitude range: -300.0958333333333 60.07916666666665
+  topography latitude  range: -66.5125 63.1125
+  Target     longitude range: -32.0 60.0
+  Target     latitude  range: -66.51326044311185 63.11375440256549
+  Refining the target to hit all source points ...
+<GMesh nj:86 ni:46 shape:(86,46)> Hit 4089 out of 672361432 cells (0.0604 Mb)
+<GMesh nj:172 ni:92 shape:(172,92)> Hit 16089 out of 672361432 cells (0.2415 Mb)
+<GMesh nj:344 ni:184 shape:(344,184)> Hit 63825 out of 672361432 cells (0.9658 Mb)
+Warning: Maximum number of allowed refinements reached without all source cells hit.
+  non-hit ratio:  672297607  /  672361432
+  Sampling the source points on target mesh ...
+  Coarsening back to the original taget grid ...
+Roughness calculation via plane fit
+
+ Merging the blocks ...
+ Total non-hit ratio:  2689065980  /  2689321280
+ Target mesh shape:  (87, 180) (87, 180)
+Writing netcdf file  ocean_topog.Merc.4deg_r3b4h1.nc  with ny,nx=  87 180
+ Periodicity test  :  -2605.8125 -1983.875
+ Periodicity break :  3138.0625
+It took 26.8136 seconds on platform  c5n0767
+time ../OMtopogen/create_topog_refinedSampling.py --hgridfilename ./dataset/ocean_hgrid.Merc.4deg.nc --nxblocks=4 --ncores=4 --max_refine=3 --source_file ./dataset/GEBCO_2014_2D.nc --source_lon lon --source_lat lat --source_elv elevation --outputfilename ocean_topog.Merc.4deg_r3b4c4noargsh1.nc --no_changing_meta
+
+Generatin model topography for target grid  ./dataset/ocean_hgrid.Merc.4deg.nc
+ Target mesh shape:  (87, 180)
+ wanted:  -300.0 -66.51326044311185
+ got:     59.99583333333334 -66.5125
+  bad
+ j,i= 2818 28799
+ wanted:  58.0 63.11375440256549
+ got:     57.99583333333334 63.1125
+  good
+ j,i= 18373 28559
+ shifting topo data to start at target lon
+ wanted:  -300.0 -66.51326044311185
+ got:     -300.00416666666666 -66.5125
+  good
+ j,i= 2818 0
+ wanted:  58.0 63.11375440256549
+ got:     57.99583333333334 63.1125
+  good
+ j,i= 18373 42960
+ halo size= 1
+ topography grid array shapes:  (43222,) (21600,)
+ topography longitude min&max: -300.0958333333333 60.07916666666665
+ topography longitude 0,1,-2,-1: -300.0958333333333 -300.0875 60.070833333333326 60.07916666666665
+ topography latitude range: -89.99583333333332 89.99583333333334
+ Is mesh uniform? True
+  Using multiple cores,  4  of  256
+...Doing block  0
+  Target sub mesh shape:  (87, 47)
+  Slices j,i: slice(2818, 18374, 1) slice(0, 43223, 1)
+  Topo shape: (15556, 43222)
+  topography longitude range: -300.0958333333333 60.07916666666665
+  topography latitude  range: -66.5125 63.1125
+  Target     longitude range: -302.0 -210.0
+  Target     latitude  range: -66.51326044311185 63.11375440256549
+  Refining the target to hit all source points ...
+<GMesh nj:86 ni:46 shape:(86,46)> Hit 4089 out of 672361432 cells (0.0604 Mb)
+<GMesh nj:172 ni:92 shape:(172,92)> Hit 16089 out of 672361432 cells (0.2415 Mb)
+<GMesh nj:344 ni:184 shape:(344,184)> Hit 63825 out of 672361432 cells (0.9658 Mb)
+Warning: Maximum number of allowed refinements reached without all source cells hit.
+  non-hit ratio:  672297607  /  672361432
+  Sampling the source points on target mesh ...
+  Coarsening back to the original taget grid ...
+Roughness calculation via plane fit
+
+...Done block  0
+...Doing block  1
+  Target sub mesh shape:  (87, 47)
+  Slices j,i: slice(2818, 18374, 1) slice(0, 43223, 1)
+  Topo shape: (15556, 43222)
+  topography longitude range: -300.0958333333333 60.07916666666665
+  topography latitude  range: -66.5125 63.1125
+  Target     longitude range: -212.0 -120.0
+  Target     latitude  range: -66.51326044311185 63.11375440256549
+  Refining the target to hit all source points ...
+<GMesh nj:86 ni:46 shape:(86,46)> Hit 4089 out of 672361432 cells (0.0604 Mb)
+<GMesh nj:172 ni:92 shape:(172,92)> Hit 16089 out of 672361432 cells (0.2415 Mb)
+<GMesh nj:344 ni:184 shape:(344,184)> Hit 63825 out of 672361432 cells (0.9658 Mb)
+Warning: Maximum number of allowed refinements reached without all source cells hit.
+  non-hit ratio:  672297607  /  672361432
+  Sampling the source points on target mesh ...
+  Coarsening back to the original taget grid ...
+Roughness calculation via plane fit
+
+...Done block  1
+...Doing block  2
+  Target sub mesh shape:  (87, 47)
+  Slices j,i: slice(2818, 18374, 1) slice(0, 43223, 1)
+  Topo shape: (15556, 43222)
+  topography longitude range: -300.0958333333333 60.07916666666665
+  topography latitude  range: -66.5125 63.1125
+  Target     longitude range: -122.0 -30.0
+  Target     latitude  range: -66.51326044311185 63.11375440256549
+  Refining the target to hit all source points ...
+<GMesh nj:86 ni:46 shape:(86,46)> Hit 4089 out of 672361432 cells (0.0604 Mb)
+<GMesh nj:172 ni:92 shape:(172,92)> Hit 16089 out of 672361432 cells (0.2415 Mb)
+<GMesh nj:344 ni:184 shape:(344,184)> Hit 63825 out of 672361432 cells (0.9658 Mb)
+Warning: Maximum number of allowed refinements reached without all source cells hit.
+  non-hit ratio:  672297607  /  672361432
+  Sampling the source points on target mesh ...
+  Coarsening back to the original taget grid ...
+Roughness calculation via plane fit
+
+...Done block  2
+ Merging the blocks ...
+ Total non-hit ratio:  2689065980  /  2689321280
+ Target mesh shape:  (87, 180) (87, 180)
+Writing netcdf file  ocean_topog.Merc.4deg_r3b4c4noargsh1.nc  with ny,nx=  87 180
+ Periodicity test  :  -2605.8125 -1983.875
+ Periodicity break :  3138.0625
+It took 81.6105 seconds on platform  c5n0767
+cat hash.md5
+ddbdba1ecd3b2f11c2b0f68bef436762  ocean_topog.Merc.4deg_r3b1h1.nc
+ddbdba1ecd3b2f11c2b0f68bef436762  ocean_topog.Merc.4deg_r3b2h1.nc
+ddbdba1ecd3b2f11c2b0f68bef436762  ocean_topog.Merc.4deg_r3b4h1.nc
+ddbdba1ecd3b2f11c2b0f68bef436762  ocean_topog.Merc.4deg_r3b4c4noargsh1.nc
+md5sum -c hash.md5
+ocean_topog.Merc.4deg_r3b1h1.nc: OK
+ocean_topog.Merc.4deg_r3b2h1.nc: OK
+ocean_topog.Merc.4deg_r3b4h1.nc: OK
+ocean_topog.Merc.4deg_r3b4c4noargsh1.nc: OK

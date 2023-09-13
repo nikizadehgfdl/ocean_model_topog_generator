@@ -91,9 +91,9 @@ def write_topog(h,hstd,hmin,hmax,xx,yy,fnam=None,format='NETCDF3_CLASSIC',descri
     y[:]=yy
     #global attributes
     if(not no_changing_meta):
-    	fout.history = history
-    	fout.description = description
-    	fout.source =  source
+        fout.history = history
+        fout.description = description
+        fout.source =  source
 
     fout.sync()
     fout.close()
@@ -272,11 +272,41 @@ def do_block(blk,lons,lats,topo_lons,topo_lats,topo_elvs,max_refine):
     have,hstd,hmin,hmax,hits = do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs,max_refine=max_refine)
     return blk,have,hstd,hmin,hmax,hits
 
+def do_block_arglist(arglist):
+    blk=arglist[0]
+    lons=arglist[1]
+    lats=arglist[2]
+    topo_lons=arglist[3]
+    topo_lats=arglist[4]
+    topo_elvs=arglist[5]
+    max_refine=arglist[6]
+    print("Doing block ",blk)
+    lon = lons[blk]
+    lat = lats[blk]
+    print("Target lon lat extents ",lon[0,0],lon[0,-1],lat[0,0],lat[-1,0])
+    have,hstd,hmin,hmax,hits = do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs,max_refine=max_refine)
+    return blk,have,hstd,hmin,hmax,hits
+
+def do_block_arglist_4partial(blk,arglist):
+    print("...Doing block ",blk)
+    have,hstd,hmin,hmax,hits = do_RSC(arglist[0][blk],arglist[1][blk],arglist[2],arglist[3],arglist[4],max_refine=arglist[5])
+    print("...Done block ",blk)
+    return blk,have,hstd,hmin,hmax,hits
+
+def do_block_noargs(blk):
+    lon = lons[blk]
+    lat = lats[blk]
+    print("...Doing block number ",blk)
+    block,h,hstd,hmin,hmax,hits = do_block(blk,lons,lats,topo_lons,topo_lats,topo_elvs,max_refine)
+    print("...Done block ",blk)
+    return block,h,hstd,hmin,hmax,hits
+
 def usage(scriptbasename):
     print(scriptbasename + ' --hgridfilename <input_hgrid_filepath> --outputfilename <output_topog_filepath>  [--plot --no_changing_meta --open_channels]')
 
 
 def main(argv):
+    #global lons,lats,topo_lons,topo_lats,topo_elvs,max_refine,nxblocks #This is only needed if we use the pool.map(do_block_noargs,range(0,nxblocks)) for multi-cores
     import socket
     import time
     host = str(socket.gethostname())
@@ -423,37 +453,54 @@ def main(argv):
     lons=break_array_to_blocks(targ_lon,nxblocks,halo, is_lon=1)
     lats=break_array_to_blocks(targ_lat,nxblocks,halo)
 
-    #We must loop over the partitions
-    Hlist=[0]*nxblocks
-    Hstdlist=[0]*nxblocks
-    Hminlist=[0]*nxblocks
-    Hmaxlist=[0]*nxblocks
-    hitslist=[0]*nxblocks
-    for blk in range(0,nxblocks):
-        lon = lons[blk]
-        lat = lats[blk]
-        print("  Doing block number ",blk+1," of ",nxblocks," of shape ",lon.shape," ................")
-        block,h,hstd,hmin,hmax,hits = do_block(blk,lons,lats,topo_lons,topo_lats,topo_elvs,max_refine)
-        #do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs,max_refine)
-        Hlist[block]=h
-        Hstdlist[block]=hstd
-        Hminlist[block]=hmin
-        Hmaxlist[block]=hmax
-        hitslist[block]=hits
+    #We must loop over the blocks
+    result=[]
+    if(ncores > 1 and ncores == nxblocks):
+        from functools import partial
+        import multiprocessing
+        from multiprocessing import Pool
+        print("  Using multiple cores, ",ncores, " of ",  multiprocessing.cpu_count())
+        arglist = [(blk,lons,lats,topo_lons,topo_lats,topo_elvs,max_refine) for blk in range(0,nxblocks)]
+        arglist_4partial = (lons,lats,topo_lons,topo_lats,topo_elvs,max_refine)
+        do_block_partial = partial(do_block_arglist_4partial, arglist=arglist_4partial)  #e.g., result = do_blk(1)
+        with Pool() as pool:
+            #result = pool.map(do_block_arglist,arglist) #method 1, seems to serialize!
+            #method 2 use partial, seems to serialize!
+            result = pool.map(do_block_partial,range(0,nxblocks)) 
+            #method 3, this runs parallel, but 
+            #          It needs a global statement for all otherwise-input-arguments
+            #          Also there is an overhead (a large delay to close the Pool) that makes this slower than the serial run!
+            #result = pool.map(do_block_noargs,range(0,nxblocks))
+    else:    
+        for blk in range(0,nxblocks):
+            res = do_block(blk,lons,lats,topo_lons,topo_lats,topo_elvs,max_refine)
+            result.append(res)
+
+    Havelist=[]
+    Hstdlist=[]
+    Hminlist=[]
+    Hmaxlist=[]
+    hitslist=[]
+    for i in range (0,len(result)):
+        Havelist.insert(result[i][0],result[i][1])
+        Hstdlist.insert(result[i][0],result[i][2])
+        Hminlist.insert(result[i][0],result[i][3])
+        Hmaxlist.insert(result[i][0],result[i][4])
+        hitslist.insert(result[i][0],result[i][5])
 
     print(" Merging the blocks ...")
-    height_refsamp = undo_break_array_to_blocks(Hlist,nxblocks,halo)
+    have_refsamp = undo_break_array_to_blocks(Havelist,nxblocks,halo)
     hstd_refsamp = undo_break_array_to_blocks(Hstdlist,nxblocks,halo)
     hmin_refsamp = undo_break_array_to_blocks(Hminlist,nxblocks,halo)
     hmax_refsamp = undo_break_array_to_blocks(Hmaxlist,nxblocks,halo)
     hits_refsamp = undo_break_array_to_blocks(hitslist,nxblocks,halo)
     print(" Total non-hit ratio: ",hits_refsamp.size-hits_refsamp.sum().astype(int)," / ",hits_refsamp.size)
     print(" Target mesh shape: ",targ_lon.shape,targ_lat.shape)
-    write_topog(height_refsamp,hstd_refsamp,hmin_refsamp,hmax_refsamp,targ_lon,targ_lat,fnam=outputfilename,description=desc,history=hist,source=source,no_changing_meta=no_changing_meta)
+    write_topog(have_refsamp,hstd_refsamp,hmin_refsamp,hmax_refsamp,targ_lon,targ_lat,fnam=outputfilename,description=desc,history=hist,source=source,no_changing_meta=no_changing_meta)
 
     #Niki: Why isn't h periodic in x?  I.e., height_refsamp[:,0] != height_refsamp[:,-1]
-    print(" Periodicity test  : ", height_refsamp[0,0] , height_refsamp[0,-1])
-    print(" Periodicity break : ", (np.abs(height_refsamp[:,0]- height_refsamp[:,-1])).max() )
+    print(" Periodicity test  : ", have_refsamp[0,0] , have_refsamp[0,-1])
+    print(" Periodicity break : ", (np.abs(have_refsamp[:,0]- have_refsamp[:,-1])).max() )
     toc = time.perf_counter()
     print(f"It took {toc - tic:0.4f} seconds on platform ",host)
 
@@ -469,7 +516,7 @@ def main(argv):
         ax.stock_img()
         ax.coastlines()
         ax.gridlines()
-        im = ax.pcolormesh(targ_lon,targ_lat,height_refsamp, transform=cartopy.crs.PlateCarree())
+        im = ax.pcolormesh(targ_lon,targ_lat,have_refsamp, transform=cartopy.crs.PlateCarree())
         plt.colorbar(im,ax=ax);
 
 
