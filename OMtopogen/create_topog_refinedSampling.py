@@ -2,7 +2,6 @@
 
 import sys, getopt
 import datetime, os, subprocess
-import imp
 import netCDF4
 import numpy as np
 try:
@@ -13,28 +12,46 @@ except:
     else:
         raise ImportError("GMesh.py not found, either install package or run within directory")
 
-def break_array_to_blocks(a,xb=4,yb=1):
+def extend_PBC_1d(a,halo,is_lon=0):
+    if(halo==0):
+      return a
+    ah = a[-halo:]-is_lon*360
+    ah = np.append(ah,a)
+    ah = np.append(ah,a[0:halo]+is_lon*360)
+    return ah
+    
+def extend_PBC(a,halo,is_lon=0):
+    if(halo==0):
+      return a
+    ah = a[:,-halo:] - is_lon*360
+    ah = np.append(ah,a,axis=1)
+    ah = np.append(ah,a[:,0:halo]+is_lon*360,axis=1)
+    return ah
+    
+def break_array_to_blocks(a,xb=4,halo=0,is_lon=0):
+    """Break the array to blocks in x-dir for handling"""
     a_win = []
-    if(yb ==1):
-        j1 = a.shape[0]//yb
-        i0 = 0
-        lx = a.shape[1]//xb
-        for k in range(xb):
-            i1=min(a.shape[1],i0+lx)
-            a_win.append(a[0:j1,i0:i1])
-            i0=i1
-        return a_win
-    else:
-        raise Exception('This rotuine can only make blocks in x-dir!')
+    lx = a.shape[1]//xb
+    #if there are overlap halos extend the array with periodic boundary condition halos
+    a = extend_PBC(a,halo,is_lon)
+    i0 = halo
+    for k in range(xb):
+        i1=i0+lx
+        a_win.append(a[:,i0-halo:i1+halo])
+        i0=i1
+    return a_win
 
-def undo_break_array_to_blocks(a,xb=4,yb=1):
-    if(yb ==1):
-        ao = a[0]
+def undo_break_array_to_blocks(a,xb=4,halo=0):
+    """Put the blocks back together"""
+    if(halo==0):
+        ao = a[0][:,:]
         for i in range(1,len(a)):
-            ao = np.append(ao,a[i],axis=1)
-        return ao
+           ao = np.append(ao,a[i][:,:],axis=1)
     else:
-        raise Exception('This rotuine can only make blocks in x-dir!')
+        ao = a[0][:,halo:-halo]
+        for i in range(1,len(a)):
+           ao = np.append(ao,a[i][:,halo:-halo],axis=1)
+    return ao
 
 def write_topog(h,hstd,hmin,hmax,xx,yy,fnam=None,format='NETCDF3_CLASSIC',description=None,history=None,source=None,no_changing_meta=None):
     import netCDF4 as nc
@@ -144,22 +161,6 @@ def get_indices2D(lon_grid,lat_grid,x,y):
 #got:     43.9958333333 36.0041666667
 #15120 26879
 
-def plot():
-    pl.clf()
-    display.clear_output(wait=True)
-    plt.figure(figsize=(10,10))
-    lonc = (lon[0,0]+lon[0,-1])/2
-    latc = 90
-    ax = plt.subplot(111, projection=cartopy.crs.NearsidePerspective(central_longitude=lonc, central_latitude=latc))
-    ax.set_global()
-    ax.stock_img()
-    ax.coastlines()
-    ax.gridlines()
-    target_mesh.plot(ax,subsample=100, transform=cartopy.crs.Geodetic())
-    plt.show(block=False)
-    plt.pause(1)
-    display.display(pl.gcf())
-
 def refine_by_repeat(x,rf):
     xrf=np.repeat(np.repeat(x[:,:],rf,axis=0),rf,axis=1) #refine by repeating values
     return xrf
@@ -169,23 +170,21 @@ def extend_by_zeros(x,shape):
     ext[:x.shape[0],:x.shape[1]] = x
     return ext
 
-def do_block(part,lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=8000):
-    print("  Doing block number ",part)
-    print("  Target sub mesh shape: ",lon.shape)
-
+def do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=80000, max_refine=10, verbose=1, use_whole_source=True):
+    if(verbose): print("  Target sub mesh shape: ",lon.shape)
     target_mesh = GMesh.GMesh( lon=lon, lat=lat )
-
-    #plot()
-
     # Indices in topographic data
     ti,tj = target_mesh.find_nn_uniform_source( topo_lons, topo_lats )
-
-    #Sample every other source points
-    ##Niki: This is only for efficeincy and we want to remove the constraint for the final product.
-    ##Niki: But in some cases it may not work!
-    #tis,tjs = slice(ti.min(), ti.max()+1,2), slice(tj.min(), tj.max()+1,2)
     tis,tjs = slice(ti.min(), ti.max()+1,1), slice(tj.min(), tj.max()+1,1)
-    print('  Slices j,i:', tjs, tis )
+    #There is a problem with the above searching algorithm when breaking the target grid
+    #to longitudinal blocks for parallelization. Specifically for some blocks the 
+    #search algorithm picks up the whole range of longitudes (-300,60) instead of the
+    #small block margins. 
+    #Without loss of generality picks up the whole source longiude range till the bug is fixed.
+    if(use_whole_source):
+        tis,tjs = slice(0, topo_lons.shape[0]+1,1), slice(tj.min(), tj.max()+1,1)
+
+    if(verbose): print('  Slices j,i:', tjs, tis )
 
     # Read elevation data
     topo_elv = topo_elvs[tjs,tis]
@@ -193,23 +192,23 @@ def do_block(part,lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=8000):
     topo_lon = topo_lons[tis]
     topo_lat = topo_lats[tjs]
 
-    print('  Topo shape:', topo_elv.shape)
-    print('  topography longitude range:',topo_lon.min(),topo_lon.max())
-    print('  topography latitude  range:',topo_lat.min(),topo_lat.max())
+    if(verbose): 
+        print('  Topo shape:', topo_elv.shape)
+        print('  topography longitude range:',topo_lon.min(),topo_lon.max())
+        print('  topography latitude  range:',topo_lat.min(),topo_lat.max())
 
-    print("  Target     longitude range:", lon.min(),lon.max())
-    print("  Target     latitude  range:", lat.min(),lat.max())
+        print("  Target     longitude range:", lon.min(),lon.max())
+        print("  Target     latitude  range:", lat.min(),lat.max())
 
     # Refine grid by 2 till all source points are hit
     print("  Refining the target to hit all source points ...")
-    Glist = target_mesh.refine_loop( topo_lon, topo_lat , max_mb=max_mb);
+    Glist = target_mesh.refine_loop( topo_lon, topo_lat , max_mb=max_mb, max_stages=max_refine)
     hits = Glist[-1].source_hits( topo_lon, topo_lat )
     print("  non-hit ratio: ",hits.size-hits.sum().astype(int)," / ",hits.size)
 
     # Sample the topography on the refined grid
     print("  Sampling the source points on target mesh ...")
     Glist[-1].sample_source_data_on_target_mesh(topo_lon,topo_lat,topo_elv)
-    print("  Sampling finished...")
 
     # Coarsen back to the original taget grid
     print("  Coarsening back to the original taget grid ...")
@@ -265,6 +264,13 @@ def do_block(part,lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=8000):
     #print("haigts shape:", lons[b].shape,Hlist[b].shape)
     return Glist[0].height,D_std,Glist[0].h_min,Glist[0].h_max, hits
 
+def do_block(blk,lons,lats,topo_lons,topo_lats,topo_elvs,max_refine):
+    print("Doing block ",blk)
+    lon = lons[blk]
+    lat = lats[blk]
+    print("Target lon lat extents ",lon[0,0],lon[0,-1],lat[0,0],lat[-1,0])
+    have,hstd,hmin,hmax,hits = do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs,max_refine=max_refine)
+    return blk,have,hstd,hmin,hmax,hits
 
 def usage(scriptbasename):
     print(scriptbasename + ' --hgridfilename <input_hgrid_filepath> --outputfilename <output_topog_filepath>  [--plot --no_changing_meta --open_channels]')
@@ -285,8 +291,13 @@ def main(argv):
     url,vx,vy,ve = '/work/Niki.Zadeh/datasets/topography/GEBCO_2014_2D.nc','lon','lat','elevation'
     # url,vx,vy,ve = 'http://thredds.socib.es/thredds/dodsC/ancillary_data/bathymetry/MED_GEBCO_30sec.nc','lon','lat','elevation'
     # url,vx,vy,ve = 'http://iridl.ldeo.columbia.edu/SOURCES/.NOAA/.NGDC/.ETOPO1/.z_bedrock/dods','lon','lat','z_bedrock'
+    max_refine = 10 #maximum number of refinings
+    nxblocks = 8 #Number of x-dir blocks to use to break to smaller less memory intensive tasks
+    ncores = 1 #Number of cores to use
+    halo=1 #Number of overlap halos between blocks
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hi:o:",["hgridfilename=","outputfilename=","no_changing_meta","open_channels","source_file=","source_lon=","source_lat=","source_elv="])
+        opts, args = getopt.getopt(sys.argv[1:],"hi:o:",["hgridfilename=","outputfilename=","no_changing_meta","open_channels",
+                                    "source_file=","source_lon=","source_lat=","source_elv=","nxblocks=","ncores=","max_refine=","halos="])
     except getopt.GetoptError as err:
         print(err)
         usage(scriptbasename)
@@ -308,6 +319,14 @@ def main(argv):
             vy = arg
         elif opt in ("--source_elv"):
             ve = arg
+        elif opt in ("--nxblocks"):
+            nxblocks = int(arg)
+        elif opt in ("--ncores"):
+            ncores = int(arg)
+        elif opt in ("--halos"):
+            halo = int(arg)
+        elif opt in ("--max_refine"):
+            max_refine = int(arg)
         elif opt in ("--plot"):
             plotem = True
         elif opt in ("--no_changing_meta"):
@@ -380,42 +399,56 @@ def main(argv):
         topo_lons = np.roll(topo_lons,-illc,axis=0) #Roll data longitude to right
         topo_lons = np.where(topo_lons>=topo_lons[0] , topo_lons-360, topo_lons) #Rename (0,60) as (-300,-180)
         topo_elvs = np.roll(topo_elvs,-illc,axis=1) #Roll data depth to the right by the same amount.
+    #Test
+    jllc,illc,status1=get_indices1D(topo_lons, topo_lats ,targ_lon[0,0] ,targ_lat[0,0])
+    jurc,iurc,status2=get_indices1D(topo_lons, topo_lats ,targ_lon[0,-1],targ_lat[-1,0])
+    if(not status1 or not status2):
+        print(' Warning: shifting topo data did not fix the issue')
 
+    print(' halo size=',halo)
+    if(halo>0):
+        #Extend source data to halos with PBC
+        topo_lons = extend_PBC_1d(topo_lons,halo+10,is_lon=1)
+        topo_elvs = extend_PBC(topo_elvs,halo+10)
+ 
     print(' topography grid array shapes: ' , topo_lons.shape,topo_lats.shape)
-    print(' topography longitude range:',topo_lons.min(),topo_lons.max())
-    print(' topography longitude range:',topo_lons[0],topo_lons[-1000])
+    print(' topography longitude min&max:',topo_lons.min(),topo_lons.max())
+    print(' topography longitude 0,1,-2,-1:',topo_lons[0],topo_lons[1],topo_lons[-2],topo_lons[-1])
     print(' topography latitude range:',topo_lats.min(),topo_lats.max())
     print(' Is mesh uniform?', GMesh.is_mesh_uniform( topo_lons, topo_lats ) )
     ### Partition the Target grid into non-intersecting blocks
     #This works only if the target mesh is "regular"! Niki: Find the mathematical buzzword for "regular"!!
     #Is this a regular mesh?
     # if( .NOT. is_mesh_regular() ) throw
-
-    xb=8
-    yb=1
-    lons=break_array_to_blocks(targ_lon,xb,yb)
-    lats=break_array_to_blocks(targ_lat,xb,yb)
+    lons=break_array_to_blocks(targ_lon,nxblocks,halo, is_lon=1)
+    lats=break_array_to_blocks(targ_lat,nxblocks,halo)
 
     #We must loop over the partitions
-    Hlist=[]
-    Hstdlist=[]
-    Hminlist=[]
-    Hmaxlist=[]
-    for part in range(0,xb):
-        lon = lons[part]
-        lat = lats[part]
-        print("  Doing block number ",part+1," of ",xb," .................")
-        h,hstd,hmin,hmax,hits = do_block(part,lon,lat,topo_lons,topo_lats,topo_elvs)
-        Hlist.append(h)
-        Hstdlist.append(hstd)
-        Hminlist.append(hmin)
-        Hmaxlist.append(hmax)
+    Hlist=[0]*nxblocks
+    Hstdlist=[0]*nxblocks
+    Hminlist=[0]*nxblocks
+    Hmaxlist=[0]*nxblocks
+    hitslist=[0]*nxblocks
+    for blk in range(0,nxblocks):
+        lon = lons[blk]
+        lat = lats[blk]
+        print("  Doing block number ",blk+1," of ",nxblocks," of shape ",lon.shape," ................")
+        block,h,hstd,hmin,hmax,hits = do_block(blk,lons,lats,topo_lons,topo_lats,topo_elvs,max_refine)
+        #do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs,max_refine)
+        Hlist[block]=h
+        Hstdlist[block]=hstd
+        Hminlist[block]=hmin
+        Hmaxlist[block]=hmax
+        hitslist[block]=hits
 
     print(" Merging the blocks ...")
-    height_refsamp = undo_break_array_to_blocks(Hlist,xb,yb)
-    hstd_refsamp = undo_break_array_to_blocks(Hstdlist,xb,yb)
-    hmin_refsamp = undo_break_array_to_blocks(Hminlist,xb,yb)
-    hmax_refsamp = undo_break_array_to_blocks(Hmaxlist,xb,yb)
+    height_refsamp = undo_break_array_to_blocks(Hlist,nxblocks,halo)
+    hstd_refsamp = undo_break_array_to_blocks(Hstdlist,nxblocks,halo)
+    hmin_refsamp = undo_break_array_to_blocks(Hminlist,nxblocks,halo)
+    hmax_refsamp = undo_break_array_to_blocks(Hmaxlist,nxblocks,halo)
+    hits_refsamp = undo_break_array_to_blocks(hitslist,nxblocks,halo)
+    print(" Total non-hit ratio: ",hits_refsamp.size-hits_refsamp.sum().astype(int)," / ",hits_refsamp.size)
+    print(" Target mesh shape: ",targ_lon.shape,targ_lat.shape)
     write_topog(height_refsamp,hstd_refsamp,hmin_refsamp,hmax_refsamp,targ_lon,targ_lat,fnam=outputfilename,description=desc,history=hist,source=source,no_changing_meta=no_changing_meta)
 
     #Niki: Why isn't h periodic in x?  I.e., height_refsamp[:,0] != height_refsamp[:,-1]
