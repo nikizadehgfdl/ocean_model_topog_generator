@@ -4,13 +4,14 @@ import sys, getopt
 import datetime, os, subprocess
 import netCDF4
 import numpy as np
-try:
-    from OMtopogen import GMesh
-except:
-    if os.path.exists('GMesh.py'):
-        import GMesh
-    else:
-        raise ImportError("GMesh.py not found, either install package or run within directory")
+#try:
+#    from OMtopogen import GMesh
+#except:
+#    if os.path.exists('GMesh.py'):
+#        import GMesh
+#    else:
+#        raise ImportError("GMesh.py not found, either install package or run within directory")
+import GMesh
 
 def extend_PBC_1d(a,halo,is_lon=0):
     if(halo==0):

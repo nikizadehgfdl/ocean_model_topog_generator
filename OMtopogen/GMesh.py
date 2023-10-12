@@ -277,27 +277,38 @@ class GMesh:
         hits[j,i] = 1
         return hits
 
-    def refine_loop(self, src_lon, src_lat, max_stages=32, max_mb=2000, verbose=True, singularity_radius=0.25):
+    def refine_loop(self, src_lon, src_lat, max_stages=32, max_mb=2000, verbose=True, singularity_radius=0.25, track_hits=False):
         """Repeatedly refines the mesh until all cells in the source grid are intercepted by mesh nodes.
            Returns a list of the refined meshes starting with parent mesh."""
         GMesh_list, this = [self], self
-        hits = this.source_hits(src_lon, src_lat, singularity_radius=singularity_radius)
-        nhits, prev_hits, mb = hits.sum().astype(int), 0, 2*8*this.shape[0]*this.shape[1]/1024/1024
-        if verbose: print(this, 'Hit', nhits, 'out of', hits.size, 'cells (%.4f'%mb,'Mb)')
+        converged = False
+        nhits, prev_hits, mb = 0,-1,2*8*this.shape[0]*this.shape[1]/1024/1024
+        if track_hits:
+            hits = this.source_hits(src_lon, src_lat, singularity_radius=singularity_radius)
+            nhits, prev_hits, mb = hits.sum().astype(int), 0, 2*8*this.shape[0]*this.shape[1]/1024/1024
+            if verbose: print(this, 'Hit', nhits, 'out of', hits.size, 'cells (%.4f'%mb,'Mb)')
+            converged = np.all(hits) or (nhits==prev_hits)
         # Conditions to refine
         # 1) Not all cells are intercepted
         # 2) A refinement intercepted more cells
-        converged = np.all(hits) or (nhits==prev_hits)
+        #In practice none of the above ever happens and checking for them is a waste of time.
+        #We should instead rely on a fixed number of refinements (max_stages).
+        #This also has the benefit of reproducibilty regardless of the number of blocks.
+        #
         while(not converged and len(GMesh_list)<max_stages and 4*mb<max_mb):
             this = this.refineby2()
-            hits = this.source_hits(src_lon, src_lat, singularity_radius=singularity_radius)
-            nhits, prev_hits, mb = hits.sum().astype(int), nhits, 2*8*this.shape[0]*this.shape[1]/1024/1024
-            converged = np.all(hits) or (nhits==prev_hits)
+            if track_hits:
+                hits = this.source_hits(src_lon, src_lat, singularity_radius=singularity_radius)
+                nhits, prev_hits, mb = hits.sum().astype(int), nhits, 2*8*this.shape[0]*this.shape[1]/1024/1024
+                if verbose: print(this, 'Hit', nhits, 'out of', hits.size, 'cells (%.4f'%mb,'Mb)')
+                converged = np.all(hits) or (nhits==prev_hits)
+                #In practice neither of the above ever happens and checking for them is a waste of time.
+
             if nhits>prev_hits:
                 GMesh_list.append( this )
-                if verbose: print(this, 'Hit', nhits, 'out of', hits.size, 'cells (%.4f'%mb,'Mb)')
+            print("Done Refinement ",len(GMesh_list)-1, " ... ")
 
-        if not converged:
+        if not converged  and track_hits:
             print("Warning: Maximum number of allowed refinements reached without all source cells hit.")
 
         return GMesh_list
