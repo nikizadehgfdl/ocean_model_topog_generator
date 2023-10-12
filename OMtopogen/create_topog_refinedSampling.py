@@ -28,7 +28,7 @@ def extend_PBC(a,halo,is_lon=0):
     ah = np.append(ah,a[:,0:halo]+is_lon*360,axis=1)
     return ah
     
-def break_array_to_blocks(a,xb=4,halo=0,is_lon=0):
+def break_array_to_blocks(a,xb=1,halo=0,is_lon=0):
     """Break the array to blocks in x-dir for handling"""
     a_win = []
     lx = a.shape[1]//xb
@@ -41,7 +41,7 @@ def break_array_to_blocks(a,xb=4,halo=0,is_lon=0):
         i0=i1
     return a_win
 
-def undo_break_array_to_blocks(a,xb=4,halo=0):
+def undo_break_array_to_blocks(a,xb=1,halo=0):
     """Put the blocks back together"""
     if(halo==0):
         ao = a[0][:,:]
@@ -291,8 +291,8 @@ def main(argv):
     url,vx,vy,ve = '/work/Niki.Zadeh/datasets/topography/GEBCO_2014_2D.nc','lon','lat','elevation'
     # url,vx,vy,ve = 'http://thredds.socib.es/thredds/dodsC/ancillary_data/bathymetry/MED_GEBCO_30sec.nc','lon','lat','elevation'
     # url,vx,vy,ve = 'http://iridl.ldeo.columbia.edu/SOURCES/.NOAA/.NGDC/.ETOPO1/.z_bedrock/dods','lon','lat','z_bedrock'
-    max_refine = 10 #maximum number of refinings
-    nxblocks = 8 #Number of x-dir blocks to use to break to smaller less memory intensive tasks
+    max_refine = 5 #maximum number of refinings
+    nxblocks = 1 #Number of x-dir blocks to use to break to smaller less memory intensive tasks
     ncores = 1 #Number of cores to use
     halo=1 #Number of overlap halos between blocks
     try:
