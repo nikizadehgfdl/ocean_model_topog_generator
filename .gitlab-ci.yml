@@ -4,11 +4,10 @@ topog:
   stage: topog
   tags:
     - gfdl
-  timeout: 2 hours 0 minutes
-  before_script:
-    - module unload python
-    - module load python/3.6.4
-    - module load git
+  timeout: 1 hours 0 minutes
   script:
-    - cd OMtopogen; pwd
-    - make test
+  - export PYTHONPATH="/net2/nnz/opt/miniconda/lib/python3.8/site-packages"; export PATH="/net2/nnz/opt/miniconda/bin:$PATH";
+  - ". activate om4labs"
+  - which python
+  - pwd
+  - (cd testing ; make)
