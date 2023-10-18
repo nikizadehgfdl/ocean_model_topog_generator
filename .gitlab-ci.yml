@@ -11,3 +11,5 @@ topog:
   - which python
   - pwd
   - (cd testing ; make)
+variables:
+  GIT_STRATEGY: clone
