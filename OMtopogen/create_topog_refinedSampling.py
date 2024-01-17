@@ -4,13 +4,7 @@ import sys, getopt
 import datetime, os, subprocess
 import netCDF4
 import numpy as np
-try:
-    from OMtopogen import GMesh
-except:
-    if os.path.exists('GMesh.py'):
-        import GMesh
-    else:
-        raise ImportError("GMesh.py not found, either install package or run within directory")
+import GMesh
 
 def extend_PBC_1d(a,halo,is_lon=0):
     if(halo==0):
@@ -204,7 +198,7 @@ def do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=80000, max_refine=10, v
     print("  Refining the target to hit all source points ...")
     Glist = target_mesh.refine_loop( topo_lon, topo_lat , max_mb=max_mb, max_stages=max_refine)
     hits = Glist[-1].source_hits( topo_lon, topo_lat )
-    print("  non-hit ratio: ",hits.size-hits.sum().astype(int)," / ",hits.size)
+    #print("  non-hit ratio: ",hits.size-hits.sum().astype(int)," / ",hits.size) #hits.size should depend on number of blocks
 
     # Sample the topography on the refined grid
     print("  Sampling the source points on target mesh ...")
@@ -446,8 +440,8 @@ def main(argv):
     hstd_refsamp = undo_break_array_to_blocks(Hstdlist,nxblocks,halo)
     hmin_refsamp = undo_break_array_to_blocks(Hminlist,nxblocks,halo)
     hmax_refsamp = undo_break_array_to_blocks(Hmaxlist,nxblocks,halo)
-    hits_refsamp = undo_break_array_to_blocks(hitslist,nxblocks,halo)
-    print(" Total non-hit ratio: ",hits_refsamp.size-hits_refsamp.sum().astype(int)," / ",hits_refsamp.size)
+    #hits_refsamp = undo_break_array_to_blocks(hitslist,nxblocks,halo) #hits have different shapes and cannot be combined.
+    #print(" Total non-hit ratio: ",hits_refsamp.size-hits_refsamp.sum().astype(int)," / ",hits_refsamp.size)
     print(" Target mesh shape: ",targ_lon.shape,targ_lat.shape)
     write_topog(height_refsamp,hstd_refsamp,hmin_refsamp,hmax_refsamp,targ_lon,targ_lat,fnam=outputfilename,description=desc,history=hist,source=source,no_changing_meta=no_changing_meta)
 
