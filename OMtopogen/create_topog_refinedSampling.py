@@ -164,7 +164,7 @@ def extend_by_zeros(x,shape):
     ext[:x.shape[0],:x.shape[1]] = x
     return ext
 
-def do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=80000, max_refine=10, verbose=1, use_whole_source=True):
+def do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=8000000, max_refine=32, verbose=1, use_whole_source=True):
     if(verbose): print("  Target sub mesh shape: ",lon.shape)
     target_mesh = GMesh.GMesh( lon=lon, lat=lat )
     # Indices in topographic data

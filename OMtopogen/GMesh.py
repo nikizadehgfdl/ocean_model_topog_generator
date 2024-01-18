@@ -277,7 +277,7 @@ class GMesh:
         hits[j,i] = 1
         return hits
 
-    def refine_loop(self, src_lon, src_lat, max_stages=32, max_mb=2000, verbose=True, singularity_radius=0.25):
+    def refine_loop(self, src_lon, src_lat, max_stages=32, max_mb=8000000, verbose=True, singularity_radius=0.25):
         """Repeatedly refines the mesh until all cells in the source grid are intercepted by mesh nodes.
            Returns a list of the refined meshes starting with parent mesh."""
         GMesh_list, this = [self], self
