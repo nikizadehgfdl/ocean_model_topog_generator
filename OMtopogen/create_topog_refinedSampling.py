@@ -209,7 +209,63 @@ def do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=8000000, max_refine=32,
     for i in reversed(range(1,len(Glist))):   # 1, makes it stop at element 1 rather than 0
         Glist[i].coarsenby2(Glist[i-1])
 
-    print("Roughness calculation via plane fit")
+    print("Roughness calculation, simple ")
+    D_std = do_roughness_simple(Glist)
+    return Glist[0].height,D_std,Glist[0].h_min,Glist[0].h_max, hits
+    
+
+def do_roughness_simple(Glist):
+    #Simple Roughness calculation: 
+    #   roughness=standard deviation of heights of source points contained/hit in the coarse grid cell
+    #
+    G=Glist[0]
+    #The refined mesh has a shape of (2*nj-1,2*ni-1) rather than (2*nj,2*ni) and hence
+    #is missing the last row/column by construction!
+    #So, the finest mesh does not have (rf*nj,rf*ni) points but is smaller by ...
+    #Bring it to the same shape as (rf*nj,rf*ni) by padding with zeros.
+    #This is for algorithm convenience and we remove the contribution of them later.
+    rf=2**(len(Glist)-1) #refinement factor
+    zs=extend_by_zeros(Glist[-1].height,(G.height.shape[0]*rf,G.height.shape[1]*rf))
+    #Fold the array so that we can use .std() method
+    #This is why we wanted to have a (nj*rf,ni*rf) shape arrays and padded with zeros above.
+    zs_coarse=np.reshape(zs,(G.height.shape[0],rf,G.height.shape[1],rf))
+    #Calculate topography roughness as the standard deviation of zs on each coarse (model) grid cell
+    D_std = zs_coarse.std(axis=(1,3))
+
+    return D_std
+
+
+def do_roughness_planefit(Glist):   
+    #Roughness calculation by plane fitting
+    #Note that the least-square plane passes through the mean data point.
+    #
+    #Plane equation: z-zm = alph*(x-xm)+beta*(y-ym)
+    #where xm,ym,zm are means of (x,y,z) cartesian coordinates of source points that are "hit" in the (coarse) model grid cell
+    #
+    #alph and beta are obtained by minimizing the sum of square of z-distance of the data points from the plane
+    # S = \sum_{p} (z_p - z_plane(x_p,y_p))^2 ; where p stands for the data points hit inside the model grid cell
+    #   = \sum_{p} (z_p-zm - alph*(x_p-xm)- beta*(y_p-ym) )^2
+    #
+    #By setting derivatives of S w.r.t. alph and beta to zero we can find the extremums of S.
+    #It can be shown that alph and beta are related to averages and covariances of the source point coordinates
+    #as follows
+    #Calculate the slopes of the planes on the coarsest (model) grid cells
+    G=Glist[0] #coarsest grid (model grid)
+    epsilon=1.0e-20 #To avoid negative underflow
+    denom=(G.xxm-G.xm*G.xm)*(G.yym-G.ym*G.ym)-(G.xym-G.xm*G.ym)*(G.xym-G.xm*G.ym)
+    alph=(G.xzm-G.xm*G.zm)*(G.yym-G.ym*G.ym)-(G.yzm-G.ym*G.zm)*(G.xym-G.xm*G.ym)/(denom+epsilon)
+    beta=(G.yzm-G.ym*G.zm)*(G.xxm-G.xm*G.xm)-(G.xzm-G.xm*G.zm)*(G.xym-G.xm*G.ym)/(denom+epsilon)
+    #In the above expression (xm,ym,zm) are the means of (x,y,z) coordinates of the source points in the coarse grid cell
+    D_std=np.zeros(G.zm.shape)
+    D_std= (G.zzm-G.zm*G.zm) + alph*alph*(G.xxm-G.xm*G.xm) + beta*beta*(G.yym-G.ym*G.ym)
+    -2*alph*(G.xzm-G.xm*G.zm) -2*beta*(G.yzm-G.ym*G.zm) +2*alph*beta*(G.xym-G.xm*G.ym)
+    
+    rf=2**(len(Glist)-1) #refinement factor
+    #The number of source points hit in each coarse grid cell is 
+    D_std=D_std/rf/rf
+    return D_std
+
+def do_roughness_old_wrong(Glist):   
     #Roughness calculation by plane fitting
     #Calculate the slopes of the planes on the coarsest (model) grid cells
     G=Glist[0]
@@ -251,12 +307,7 @@ def do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=8000000, max_refine=32,
     epsilon=1.0e-20 #To avoid negative underflow
     D_std[:,:] = D_times_denom_coarse_std[:,:]/(denom[:,:]+epsilon)
 
-    print("")
-    #print("Writing ...")
-    #filename = 'topog_refsamp_BP.nc'+str(b)
-    #write_topog(Glist[0].height,fnam=filename,no_changing_meta=True)
-    #print("haigts shape:", lons[b].shape,Hlist[b].shape)
-    return Glist[0].height,D_std,Glist[0].h_min,Glist[0].h_max, hits
+    return D_std
 
 def do_block(blk,lons,lats,topo_lons,topo_lats,topo_elvs,max_refine):
     print("Doing block ",blk)
