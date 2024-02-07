@@ -1,27 +1,46 @@
 #!/usr/bin/env python
 
 import numpy as np
+import time
 
-def fourPointAve(x):
-    xave = np.copy(x[::2,::2])
-    xave[:-1,:-1]=0.25*(x[:-1:2,:-1:2]+x[1::2,1::2]+x[1::2,0:-1:2]+x[0:-1:2,1::2])
-    return xave
+def is_coord_uniform(coord, tol=1.e-5):
+    """Returns True if the coordinate "coord" is uniform along the first axis, and False otherwise
+
+    tol is the allowed fractional variation in spacing, i.e. ( variation in delta ) / delta < tol"""
+    eps = np.finfo( coord.dtype ).eps # Precision of datatype
+    # abscoord = np.abs( coord ) # Magnitude of coordinate values
+    # abscoord = np.maximum( abscoord[1:], abscoord[:-1] ) # Largest magnitude of coordinate used at centers
+    # roundoff = eps * abscoord # This is the roundoff error in calculating "coord[1:] - coord[:-1]"
+    delta = np.abs( coord[1:] - coord[:-1] ) # Spacing along first axis
+    roundoff = tol * delta[0] # Assuming delta is approximately uniform, use first value to estimate allowed variance
+    derror = np.abs( delta - delta.flatten()[0] ) # delta should be uniform so delta - delta[0] should be zero
+    return np.all( derror <= roundoff )
 
 def is_mesh_uniform(lon,lat):
     """Returns True if the input grid (lon,lat) is uniform and False otherwise"""
-    def compare(array):
-        eps = np.finfo( array.dtype ).eps # Precision of datatype
-        delta = np.abs( array[1:] - array[:-1] ) # Difference along first axis
-        error = np.abs( array )
-        error = np.maximum( error[1:], error[:-1] ) # Error in difference
-        derror = np.abs( delta - delta.flatten()[0] ) # Tolerance to which comparison can be made
-        return np.all( derror < ( error + error.flatten()[0] ) )
     assert len(lon.shape) == len(lat.shape), "Arguments lon and lat must have the same rank"
-    if len(lon.shape)==2: # 2D arralat
+    if len(lon.shape)==2: # 2D array
         assert lon.shape == lat.shape, "Arguments lon and lat must have the same shape"
-    if len(lon.shape)>2 or len(lat.shape)>2:
-        raise Exception("Arguments must be either both be 1D or both be 2D arralat")
-    return compare(lat) and compare(lon.T)
+    assert len(lon.shape)<3 and len(lat.shape)<3, "Arguments must be either both be 1D or both be 2D arralat"
+    return is_coord_uniform(lat) and is_coord_uniform(lon.T)
+
+def pfactor(n):
+    primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 0] # 0 causes error
+    for p in primes:
+        assert p > 0, "Ran out of primes - use a more robust method ..."
+        if n % p == 0:
+            if n == p:
+                return [ p ]
+            else:
+                x = pfactor( n // p )
+                x.append( p )
+                return x
+        if p * p > n:
+            return [ n ]
+    return [ n ]
+
+from numba import int32, float32    # import the types
+from numba.experimental import jitclass
 
 class GMesh:
     """Describes 2D meshes for ESMs.
@@ -108,11 +127,21 @@ class GMesh:
 
         self.rfl = rfl #refining level
 
+    def __copy__(self):
+        return GMesh(shape = self.shape, lon=self.lon, lat=self.lat, area=self.area)
+    def copy(self):
+        """Returns new instance with copied values"""
+        return self.__copy__()
     def __repr__(self):
-        return '<GMesh nj:%i ni:%i shape:(%i,%i)>'%(self.nj,self.ni,self.shape[0],self.shape[1])
+        return '<%s nj:%i ni:%i shape:(%i,%i)>'%(self.__class__.__name__,self.nj,self.ni,self.shape[0],self.shape[1])
     def __getitem__(self, key):
         return getattr(self, key)
-
+    def transpose(self):
+        """Transpose data swapping i-j indexes"""
+        self.ni, self.nj = self.nj, self.ni
+        self.shape = (self.nj, self.ni)
+        self.lat, self.lon = self.lon.T, self.lat.T
+        if self.area is not None: self.area = self.area.T
     def dump(self):
         """Dump Mesh to tty."""
         print(self)
@@ -145,11 +174,57 @@ class GMesh:
         lon = np.where( Y>=0, lon, -lon ) # Handle -180 .. 0
         return lon,lat
 
+    def interp_center_coords(self, work_in_3d=True):
+        """Returns interpolated center coordinates from nodes"""
+
+        def mean4(A):
+            """Retruns a refined variable a with shape (2*nj+1,2*ni+1) by linearly interpolation A with shape (nj+1,ni+1)."""
+            return 0.25 * ( ( A[:-1,:-1] + A[1:,1:] ) + ( A[1:,:-1] + A[:-1,1:] ) ) # Mid-point of cell on original mesh
+
+        if work_in_3d:
+            # Calculate 3d coordinates of nodes (X,Y,Z), Z points along pole, Y=0 at lon=0,180, X=0 at lon=+-90
+            X,Y,Z = GMesh.__lonlat_to_XYZ(self.lon, self.lat)
+
+            # Refine mesh in 3d and project onto sphere
+            X,Y,Z = mean4(X), mean4(Y), mean4(Z)
+            R = 1. / np.sqrt((X*X + Y*Y) + Z*Z)
+            X,Y,Z = R*X, R*Y, R*Z
+
+            # Normalize X,Y to unit circle
+            #sub_roundoff = 2./np.finfo(X[0,0]).max
+            #R = 1. / ( np.sqrt(X*X + Y*Y) + sub_roundoff )
+            #X = R * X
+            #Y = R * Y
+
+            # Convert from 3d to spherical coordinates
+            lon,lat = GMesh.__XYZ_to_lonlat(X, Y, Z)
+        else:
+            lon,lat = mean4(self.lon), mean4(self.lat)
+        return lon, lat
+
+    def coarsest_resolution(self, mask_idx=[]):
+        """Returns the coarsest resolution at each grid"""
+        def mdist(x1, x2):
+            """Returns positive distance modulo 360."""
+            return np.minimum(np.mod(x1 - x2, 360.0), np.mod(x2 - x1, 360.0))
+        l, p = self.lon, self.lat
+        del_lam = np.maximum(np.maximum(np.maximum(mdist(l[:-1,:-1], l[:-1,1:]), mdist(l[1:,:-1], l[1:,1:])),
+                                        np.maximum(mdist(l[:-1,:-1], l[1:,:-1]), mdist(l[1:,1:], l[:-1,1:]))),
+                             np.maximum(mdist(l[:-1,:-1], l[1:,1:]), mdist(l[1:,:-1], l[:-1,1:])))
+        del_phi = np.maximum(np.maximum(np.maximum(np.abs(np.diff(p, axis=0))[:,1:], np.abs((np.diff(p, axis=0))[:,:-1])),
+                                        np.maximum(np.abs(np.diff(p, axis=1))[1:,:], np.abs((np.diff(p, axis=1))[:-1,:]))),
+                             np.maximum(np.abs(p[:-1,:-1]-p[1:,1:]), np.abs(p[1:,:-1]-p[:-1,1:])))
+        if len(mask_idx)>0:
+            for Js, Je, Is, Ie in mask_idx:
+                jst, jed, ist, ied = Js*(2**self.rfl), Je*(2**self.rfl), Is*(2**self.rfl), Ie*(2**self.rfl)
+                del_lam[jst:jed, ist:ied], del_phi[jst:jed, ist:ied] = 0.0, 0.0
+        return del_lam, del_phi
+
     def refineby2(self, work_in_3d=True):
         """Returns new Mesh instance with twice the resolution"""
 
         def local_refine(A):
-            """Retruns a refined variable a with shape (2*nj-1,2*ni-1) by linearly interpolation A with shape (nj,ni)."""
+            """Retruns a refined variable a with shape (2*nj+1,2*ni+1) by linearly interpolation A with shape (nj+1,ni+1)."""
             nj,ni = A.shape
             a = np.zeros( (2*nj-1,2*ni-1) )
             a[::2,::2] = A[:,:] # Shared nodes
@@ -198,146 +273,257 @@ class GMesh:
 
         return self
 
-    #@profile
-    def coarsenby2(self, coarser_mesh):
+    def coarsenby2(self, coarser_mesh, debug=False, timers=False):
         """Set the height for lower level Mesh by coarsening"""
         if(self.rfl == 0):
             raise Exception('Coarsest grid, no more coarsening possible!')
 
-        coarser_mesh.height = np.copy(self.height[::2,::2])
-        coarser_mesh.height[:-1,:-1] = 0.25*(self.height[:-1:2,:-1:2]
-                                           + self.height[1::2,1::2]
-                                           + self.height[1::2,0:-1:2]
-                                           + self.height[0:-1:2,1::2])
+        if timers: gtic = GMesh._toc(None, "")
+        coarser_mesh.height = 0.25 * ( ( self.height[:-1:2,:-1:2] + self.height[1::2,1::2] )
+                                     + ( self.height[1::2,:-1:2] + self.height[:-1:2,1::2] ) )
+        if timers: gtic = GMesh._toc(gtic, "Whole process")
 
-        coarser_mesh.h_min = np.copy(self.height[::2,::2])
-        coarser_mesh.h_min[:-1,:-1] = np.minimum(self.height[:-1:2,:-1:2],self.height[1::2,1::2])
-        coarser_mesh.h_min[:-1,:-1] = np.minimum(coarser_mesh.h_min[:-1,:-1],self.height[1::2,0:-1:2])
-        coarser_mesh.h_min[:-1,:-1] = np.minimum(coarser_mesh.h_min[:-1,:-1],self.height[0:-1:2,1::2])
+    def find_nn_uniform_source(self, eds, use_center=True, debug=False):
+        """Returns the i,j arrays for the indexes of the nearest neighbor centers at (lon,lat) to the self nodes
+        The option use_center=True is default so that lon,lat are cell-center coordinates."""
 
-        coarser_mesh.h_max = np.copy(self.height[::2,::2])
-        coarser_mesh.h_max[:-1,:-1] = np.maximum(self.height[:-1:2,:-1:2],self.height[1::2,1::2])
-        coarser_mesh.h_max[:-1,:-1] = np.maximum(coarser_mesh.h_max[:-1,:-1],self.height[1::2,0:-1:2])
-        coarser_mesh.h_max[:-1,:-1] = np.maximum(coarser_mesh.h_max[:-1,:-1],self.height[0:-1:2,1::2])
-
-        #coarser_mesh.zm = coarser_mesh.height
-        #coarser_mesh.xm = fourPointAve(self.xm)
-        #coarser_mesh.ym = fourPointAve(self.ym)
-        #coarser_mesh.xxm = fourPointAve(self.xxm)
-        #coarser_mesh.yym = fourPointAve(self.yym)
-        #coarser_mesh.zzm = fourPointAve(self.zzm)
-        #coarser_mesh.xym = fourPointAve(self.xym)
-        #coarser_mesh.xzm = fourPointAve(self.xzm)
-        #coarser_mesh.yzm = fourPointAve(self.yzm)
-
-    def mdist(x1,x2):
-        """Returns positive distance modulo 360."""
-        return np.minimum( np.mod(x1-x2,360.), np.mod(x2-x1,360.) )
-
-    def find_nn_uniform_source(self, lon, lat):
-        """Returns the i,j arrays for the indexes of the nearest neighbor point to grid (lon,lat)"""
-        assert is_mesh_uniform(lon,lat), 'Grid (lon,lat) is not uniform, this method will not work properly'
-        if len(lon.shape)==2:
-            # Convert to 1D arrays
-            lon,lat = lon[0,:],lat[:,0]
-        sni,snj =lon.shape[0],lat.shape[0] # Shape of source
-        # Spacing on uniform mesh
-        dellon, dellat = (lon[-1]-lon[0])/(sni-1), (lat[-1]-lat[0])/(snj-1)
-#original
-#        assert self.lat.max()<=lat.max()+0.5*dellat, 'Mesh has latitudes above range of regular grid '+str(self.lat.max())+' '+str(lat.max()+0.5*dellat)
-#        assert self.lat.min()>=lat.min()-0.5*dellat, 'Mesh has latitudes below range of regular grid '+str(self.lat.min())+' '+str(lat.min()-0.5*dellat)
-#changed
-#        assert self.lat.max()>=lat.max()-0.5*dellat, 'Source has latitudes above range of target mesh '+str(self.lat.max())+' '+str(lat.max()-0.5*dellat)
-#        assert self.lat.min()<=lat.min()+0.5*dellat, 'Source has latitudes below range of target mesh '+str(self.lat.min())+' '+str(lat.min()+0.5*dellat)
-#neither works for bipole
-
-        if abs( (lon[-1]-lon[0])-360 )<=360.*np.finfo( lon.dtype ).eps:
-            print("Detected repeated longitude ",lon[0],lon[-1])
-            sni-=1 # Account for repeated longitude
-        # Nearest integer (the upper one if equidistant)
-        nn_i = np.floor(np.mod(self.lon-lon[0]+0.5*dellon,360)/dellon)
-        nn_j = np.floor(0.5+(self.lat-lat[0])/dellat)
-        nn_i = np.minimum(nn_i, sni-1)
-        nn_j = np.minimum(nn_j, snj-1)
-        nn_i = np.maximum(nn_i, 0)
-        nn_j = np.maximum(nn_j, 0)
+        if use_center:
+            # Searching for source cells that the self centers fall into
+            lon_tgt, lat_tgt = self.interp_center_coords(work_in_3d=True)
+        else:
+            # Searching for source cells that the self nodes fall into
+            lon_tgt, lat_tgt = self.lon, self.lat
+        nn_i,nn_j = eds.indices( lon_tgt, lat_tgt )
+        if debug:
+            print('Self lon =',lon[0],'...',lon[-1])
+            print('Self lat =',lat[0],'...',lat[-1])
+            print('Target lon =',lon_tgt)
+            print('Target lat =',lat_tgt)
+            print('Source lon =',lon[nn_i])
+            print('Source lat =',lat[nn_j])
+            print('NN i =',nn_i)
+            print('NN j =',nn_j)
         assert nn_j.min()>=0, 'Negative j index calculated! j='+str(nn_j.min())
-        assert nn_j.max()<snj, 'Out of bounds j index calculated! j='+str(nn_j.max())+'snj='+str(snj)
+        assert nn_j.max()<eds.nj, 'Out of bounds j index calculated! j='+str(nn_j.max())
         assert nn_i.min()>=0, 'Negative i index calculated! i='+str(nn_i.min())
-        assert nn_i.max()<sni, 'Out of bounds i index calculated! i='+str(nn_i.max())+'sni='+str(sni)
-        return nn_i.astype(int),nn_j.astype(int)
+        assert nn_i.max()<eds.ni, 'Out of bounds i index calculated! i='+str(nn_i.max())
+        return nn_i,nn_j
 
-    def source_hits(self, xs, ys, singularity_radius=0.25):
+    def source_hits(self, eds, use_center=True, singularity_radius=0.25):
         """Returns an mask array of 1's if a cell with center (xs,ys) is intercepted by a node
            on the mesh, 0 if no node falls in a cell"""
         # Indexes of nearest xs,ys to each node on the mesh
-        i,j = self.find_nn_uniform_source(xs,ys)
-        sni,snj =xs.shape[0],ys.shape[0] # Shape of source
-        hits = np.zeros((snj,sni))
-        if singularity_radius>0: hits[np.abs(ys)>90-singularity_radius] = 1
+        i,j = self.find_nn_uniform_source(eds, use_center=use_center)
+        hits = np.zeros((eds.nj,eds.ni))
+        if singularity_radius>0: hits[np.abs(eds.lath)>90-singularity_radius,:] = 1
         hits[j,i] = 1
-        return hits.sum(),hits.size,np.all(hits)
+        return hits.sum().astype(int),hits.size,np.all(hits)
 
-    #@profile
-    def refine_loop(self, src_lon, src_lat, max_stages=32, max_mb=8000000, verbose=True, singularity_radius=0.25):
+    def _toc(tic, label):
+        if tic is not None:
+            dt = ( time.time_ns() - tic ) // 1000000
+            if dt<9000: print( '{:>10}ms : {}'.format( dt, label) )
+            else: print( '{:>10}secs : {}'.format( dt / 1000, label) )
+        return time.time_ns()
+
+    def refine_loop(self, eds, max_stages=32, max_mb=32000, fixed_refine_level=0, work_in_3d=True,
+                    use_center=True, resolution_limit=True, mask_res=[], singularity_radius=0.25, verbose=True, timers=False):
         """Repeatedly refines the mesh until all cells in the source grid are intercepted by mesh nodes.
            Returns a list of the refined meshes starting with parent mesh."""
+        if timers: gtic = GMesh._toc(None, "")
         GMesh_list, this = [self], self
-        # Conditions to refine
-        # 1) Not all cells are intercepted
-        # 2) A refinement intercepted more cells
         nhits = 0
         all_hit = False
         nhit_converged = False
         converged = False
         prev_hits = nhits
-        nhits,sizehit,all_hit = this.source_hits(src_lon, src_lat, singularity_radius=singularity_radius)
-        if verbose: print(this, 'Hit', nhits, 'out of', sizehit)
-        while(not converged and len(GMesh_list)<max_stages):
-            this = this.refineby2()
+        if fixed_refine_level<1:
+            nhits,sizehit,all_hit = this.source_hits(eds, use_center=use_center, singularity_radius=singularity_radius)
+            converged = converged or all_hit or (nhits==prev_hits)
             prev_hits = nhits
-            nhits,sizehit,all_hit = this.source_hits(src_lon, src_lat, singularity_radius=singularity_radius)
-            if verbose: print(this, 'Hit', nhits, 'out of', sizehit)
-            if nhits>prev_hits:
-                GMesh_list.append( this )
-            nhit_converged = ((nhits-prev_hits)<0.001*prev_hits)
-            converged = all_hit or nhit_converged
- 
-        if converged:
-            if(all_hit): print("Converged since All source data was used")
-            if(nhit_converged): print("Converged since Number of hits converged")
-        else:
+        mb = 2*8*this.shape[0]*this.shape[1]/1024/1024
+        if resolution_limit:
+            dellon_s, dellat_s = eds.spacing()
+            del_lam, del_phi = this.coarsest_resolution(mask_idx=mask_res)
+            dellon_t, dellat_t = del_lam.max(), del_phi.max()
+            converged = converged or ( (dellon_t<=dellon_s) and (dellat_t<=dellat_s) )
+        if timers: tic = GMesh._toc(gtic, "Set up")
+        if verbose:
+            print('Refine level', this.rfl, this)
+            if resolution_limit:
+                print('dx~1/{} dy~1/{}'.format(int(1/dellon_t), int(1/dellat_t)))
+            #print('(%.4f'%mb,'Mb)')
+        # Conditions to refine
+        # 1) Not all cells are intercepted
+        # 2) A refinement intercepted more cells
+        # 3) [if resolution_limit] Coarsest resolution in each direction is coarser than source.
+        #    This avoids the excessive refinement which is essentially extrapolation.
+        while ( (not converged) \
+               and (len(GMesh_list)<max_stages) \
+               and (4*mb<max_mb) \
+               and (fixed_refine_level<1) \
+              ) or (this.rfl < fixed_refine_level):
+            if timers: tic = GMesh._toc(None, "")
+            this = this.refineby2(work_in_3d=work_in_3d)
+            if timers: stic = GMesh._toc(tic, "refine by 2")
+            # Find nearest neighbor indices into source
+            if fixed_refine_level<1:
+                nhits,sizehit,all_hit = this.source_hits(eds, singularity_radius=singularity_radius)
+                if timers: stic = GMesh._toc(stic, "calculate hits on topo grid")
+                converged = converged or np.all(hits) or (nhits==prev_hits)
+                prev_hits=nhits
+
+            mb = 2*8*this.shape[0]*this.shape[1]/1024/1024
+            if resolution_limit:
+                del_lam, del_phi = this.coarsest_resolution(mask_idx=mask_res)
+                dellon_t, dellat_t = del_lam.max(), del_phi.max()
+                converged = converged or ( (dellon_t<=dellon_s) and (dellat_t<=dellat_s) )
+                if timers: stic = GMesh._toc(stic, "calculate resolution stopping criteria")
+            GMesh_list.append( this )
+            if timers: stic = GMesh._toc(stic, "extending list")
+            if timers: tic = GMesh._toc(tic, "Total for loop")
+            if verbose:
+                print('Refine level', this.rfl, this)
+                if resolution_limit:
+                    print('dx~1/{} dy~1/{}'.format(int(1/dellon_t), int(1/dellat_t)), end=" ")
+
+        if verbose: 
+            nhits,sizehit,all_hit = this.source_hits(eds, singularity_radius=singularity_radius)
+            print(' Hit', nhits, 'out of', sizehit, 'cells')
+    
+        if not converged and fixed_refine_level<1:
             print("Warning: Maximum number of allowed refinements reached without all source cells hit.")
+        if timers: tic = GMesh._toc(gtic, "Total for whole process")
+
         return GMesh_list
 
-    #@profile
-    def sample_source_data_on_target_mesh(self,xs,ys,zs):
-        """Returns the array on target mesh with values equal to the nearest-neighbor source point data"""
-        # Indexes of nearest xs,ys to each node on the mesh
-        i,j = self.find_nn_uniform_source(xs,ys)
-        self.height = np.zeros(self.lon.shape)
-        self.height[:,:] = zs[j[:],i[:]]
-        self.h_min = np.zeros(self.lon.shape)
-        self.h_max = np.zeros(self.lon.shape)
-	# Quantities needed for calculating the roughness
-        self.xm = np.zeros(self.lon.shape)
-        self.ym = np.zeros(self.lon.shape)
-        #self.zm = np.zeros(self.lon.shape)
-        #self.xxm = np.zeros(self.lon.shape)
-        #self.yym = np.zeros(self.lon.shape)
-        #self.zzm = np.zeros(self.lon.shape)
-        #self.xym = np.zeros(self.lon.shape)
-        #self.xzm = np.zeros(self.lon.shape)
-        #self.yzm = np.zeros(self.lon.shape)
-        self.xm[:,:] = xs[i[:]]
-        self.ym[:,:] = ys[j[:]]
-        #self.zm[:,:] = zs[j[:],i[:]]
-        #self.xxm[:,:] = self.xm[:,:] * self.xm[:,:]
-        #self.yym[:,:] = self.ym[:,:] * self.ym[:,:]
-        #self.zzm[:,:] = self.zm[:,:] * self.zm[:,:]
-        #self.xym[:,:] = self.xm[:,:] * self.ym[:,:]
-        #self.xzm[:,:] = self.xm[:,:] * self.zm[:,:]
-        #self.yzm[:,:] = self.ym[:,:] * self.zm[:,:]
+    def project_source_data_onto_target_mesh(self, eds, use_center=True, timers=False):
+        """Returns the EDS data on the target mesh (self) with values equal to the nearest-neighbor source point data"""
+        if timers: gtic = GMesh._toc(None, "")
+        if use_center:
+            self.height = np.zeros((self.nj,self.ni))
+            tx, ty = self.interp_center_coords(work_in_3d=True)
+        else:
+            self.height = np.zeros((self.nj+1,self.ni+1))
+            tx, ty = self.lon, self.lat
+        if timers: tic = GMesh._toc(gtic, "Allocate memory")
+        nns_i,nns_j = eds.indices( tx, ty )
+        if timers: tic = GMesh._toc(tic, "Calculate interpolation indexes")
+        self.height[:,:] = eds.data[nns_j[:,:],nns_i[:,:]]
+        if timers: tic = GMesh._toc(tic, "indirect indexing")
+        if timers: tic = GMesh._toc(gtic, "Whole process")
 
-        return
+class RegularCoord:
+    """Container for uniformly spaced global cell center coordinate parameters
 
+    For use with uniformly gridded data that has cell center global coordinates"""
+    def __init__( self, n, origin, periodic, degppi=180 ):
+        """Create a RegularCoord
+        n         is number of cells;
+        origin    is the coordinate on the left edge (not first);
+        periodic  distinguishes between longitude and latitude
+        """
+        self.n = n # Global parameter
+        self.periodic = periodic # Global parameter
+        if periodic: self.delta, self.rdelta = ( 2 * degppi ) / n, n / ( 2 * degppi )  # Global parameter
+        else: self.delta, self.rdelta = degppi / n, n / degppi # Global parameter
+        self.origin = origin # Global parameter
+        self.offset = np.floor( self.rdelta * self.origin ).astype(int) # Global parameter
+        self.rem = np.mod( self.rdelta * self.origin, 1 ) # Global parameter ( needed for odd n)
+        self.start = 0 # Special for each subset
+        self.stop = self.n # Special for each subset
+    def __repr__( self ):
+        return '<RegularCoord n={}, dx={}, rdx={}, x0={}, io={}, rem={}, is-ie={}-{}, periodic={}>'.format( \
+            self.n, self.delta, self.rdelta, self.origin, self.offset, self.rem, self.start, self.stop, self.periodic)
+    def subset( self, slc ):
+        """Subset a RegularCoord with slice "slc" """
+        Is, Ie = 0, self.n
+        if slc.start is not None: Is = slc.start
+        if slc.stop is not None: Ie = slc.stop
+        S = RegularCoord( self.n, self.origin, self.periodic ) # This creates a copy of "self"
+        S.start, S.stop = Is, Ie
+        return S
+    def indices( self, x, bound_subset=False ):
+        """Return indices of cells that contain x
+
+        If RegularCoord is non-periodic (i.e. latitude), out of range values of "x" will be clipped to -90..90 .
+        If regularCoord is periodic, any value of x will be globally wrapped.
+        If RegularCoord is a subset, then "x" will be clipped to the bounds of the subset (after periodic wrapping).
+        if "bound_subset" is True, then limit indices to the range of the subset
+        """
+        ind = np.floor( self.rdelta * np.array(x) - self.rem ).astype(int) - self.offset
+        # Apply global bounds
+        if self.periodic:
+            ind = np.mod( ind, self.n )
+        else:
+            ind = np.maximum( 0, np.minimum( self.n - 1, ind ) )
+        # Now adjust for subset
+        if bound_subset:
+            ind = np.maximum( self.start, np.minimum( self.stop - 1, ind ) ) - self.start
+            assert ind.min() >= 0, "out of range"
+            assert ind.max() < self.stop - self.start, "out of range"
+        else:
+            ind = ind - self.start
+            assert ind.min() >= 0, "out of range"
+            assert ind.max() < self.stop - self.start, "out of range"
+        return ind
+
+class UniformEDS:
+    """Container for a uniform elevation dataset"""
+    def __init__( self, lon, lat, elevation=None ):
+        """(lon,lat) are cell centers and 1D with combined shape equalt that of elevation."""
+        assert len(lon.shape) == 1, "Longitude must be 1D"
+        assert len(lat.shape) == 1, "Latitude must be 1D"
+        self.ni = len(lon)
+        self.nj = len(lat)
+        # Store coordinates for posterity
+        self.lonh, self.lath = lon, lat
+
+        if elevation is None: # When creating a subset, we temporarily allow the creation of a "blank" UniformEDS
+            self.lon_coord, self.lat_coord = None, None
+            self.lonq, self.latq = None, None
+            self.data = np.zeros((0))
+        else: # This is the real constructor
+            assert len(lon) == elevation.shape[1], "Inconsistent longitude shape"
+            assert len(lat) == elevation.shape[0], "Inconsistent latitude shape"
+            dlon, dlat = 360. / self.ni, 180 / self.nj
+            assert np.abs( lon[-1] - lon[0] - 360 + dlon ) < 1.e-5 * dlon, "longitude does not appear to be global"
+            assert np.abs( lat[-1] - lat[0] - 180 + dlat ) < 1.e-5 * dlat, "latitude does not appear to be global"
+            lon0 = np.floor( lon[0] - 0.5 * dlon + 0.5 ) # Calculating the phase this way restricts ourselves to data starting on integer values
+            assert np.abs( lon[0] - 0.5 * dlon - lon0 ) < 1.e-9 * dlon, "edge of longitude is not a round number"
+            assert np.abs( lat[0] - 0.5 * dlat + 90 ) < 1.e-9 * dlat, "edge of latitude is not 90"
+            self.lon_coord = RegularCoord( self.ni, lon0, True)
+            self.lat_coord = RegularCoord( self.nj, -90, False)
+            # Calculate node coordinates for convenient plotting
+            self.lonq = lon0 + dlon * ( np.arange( self.ni + 1 ) )
+            self.latq = dlat * ( np.arange( self.nj + 1 ) - 0.5 * self.nj )
+            self.dlon, self.dlat = 360. / self.ni, 180 / self.nj
+            self.data = elevation
+    def __repr__( self ):
+        mem = ( self.ni * self.nj + self.ni + self.nj ) * 8 / 1024 / 1024 / 1024 # Gb
+        return '<UniformEDS {} x {} ({:.3f}Gb)\nlon = {}\nh:{}\nq:{}\nlat = {}\nh:{}\nq:{}\ndata = {}>'.format( \
+            self.ni, self.nj, mem, self.lon_coord, self.lonh, self.lonq, self.lat_coord, self.lath, self.latq, self.data.shape )
+    def spacing( self ):
+        """Returns the longitude and latitude spacing"""
+        return self.dlon, self.dlat
+    def subset( self, islice, jslice ):
+        """Subset a UniformEDS as [jslice,islice]"""
+        S = UniformEDS( self.lonh[islice], self.lath[jslice] )
+        S.lon_coord = self.lon_coord.subset( islice )
+        S.lat_coord = self.lat_coord.subset( jslice )
+        S.lonq = self.lonq[ slice( islice.start, islice.stop + 1 ) ]
+        S.latq = self.latq[ slice( jslice.start, jslice.stop + 1 ) ]
+        S.dlon, S.dlat = self.dlon, self.dlat
+        S.data = self.data[jslice, islice]
+        return S
+    def indices( self, lon, lat, bound_subset=False ):
+        """Return the i,j indices of cells in which (lon,lat) fall"""
+        return self.lon_coord.indices( lon, bound_subset=bound_subset ), self.lat_coord.indices( lat, bound_subset=bound_subset )
+    def bb_slices( self, lon, lat ):
+        """Returns the slices defining the bounding box of data hit by (lon,lat)"""
+        si, sj = self.indices( lon, lat )
+        return slice( si.min(), si.max() +1 ), slice( sj.min(), sj.max() + 1 )
+    def plot(self, axis, subsample=None, **kwargs):
+        if subsample is None:
+            return axis.pcolormesh( self.lonq, self.latq, self.data, **kwargs )
+        return axis.pcolormesh( self.lonq[::subsample], self.latq[::subsample], self.data[::subsample,::subsample], **kwargs )
