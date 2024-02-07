@@ -198,6 +198,7 @@ class GMesh:
 
         return self
 
+    #@profile
     def coarsenby2(self, coarser_mesh):
         """Set the height for lower level Mesh by coarsening"""
         if(self.rfl == 0):
@@ -275,29 +276,30 @@ class GMesh:
         hits = np.zeros((snj,sni))
         if singularity_radius>0: hits[np.abs(ys)>90-singularity_radius] = 1
         hits[j,i] = 1
-        return hits
+        return hits.sum(),hits.size,np.all(hits)
 
+    #@profile
     def refine_loop(self, src_lon, src_lat, max_stages=32, max_mb=8000000, verbose=True, singularity_radius=0.25):
         """Repeatedly refines the mesh until all cells in the source grid are intercepted by mesh nodes.
            Returns a list of the refined meshes starting with parent mesh."""
         GMesh_list, this = [self], self
-        hits = this.source_hits(src_lon, src_lat, singularity_radius=singularity_radius)
-        nhits, prev_hits, mb = hits.sum().astype(int), 0, 2*8*this.shape[0]*this.shape[1]/1024/1024
-        if verbose: print(this, 'Hit', nhits, 'out of', hits.size, 'cells (%.4f'%mb,'Mb)')
         # Conditions to refine
         # 1) Not all cells are intercepted
         # 2) A refinement intercepted more cells
+        nhits = 0
         all_hit = False
         nhit_converged = False
         converged = False
-        while(not converged and len(GMesh_list)<max_stages and 4*mb<max_mb):
+        prev_hits = nhits
+        nhits,sizehit,all_hit = this.source_hits(src_lon, src_lat, singularity_radius=singularity_radius)
+        if verbose: print(this, 'Hit', nhits, 'out of', sizehit)
+        while(not converged and len(GMesh_list)<max_stages):
             this = this.refineby2()
-            hits = this.source_hits(src_lon, src_lat, singularity_radius=singularity_radius)
-            nhits, prev_hits, mb = hits.sum().astype(int), nhits, 2*8*this.shape[0]*this.shape[1]/1024/1024
-            if verbose: print(this, 'Hit', nhits, 'out of', hits.size, 'cells (%.4f'%mb,'Mb)')
+            prev_hits = nhits
+            nhits,sizehit,all_hit = this.source_hits(src_lon, src_lat, singularity_radius=singularity_radius)
+            if verbose: print(this, 'Hit', nhits, 'out of', sizehit)
             if nhits>prev_hits:
                 GMesh_list.append( this )
-            all_hit = np.all(hits)
             nhit_converged = ((nhits-prev_hits)<0.001*prev_hits)
             converged = all_hit or nhit_converged
  
@@ -306,9 +308,9 @@ class GMesh:
             if(nhit_converged): print("Converged since Number of hits converged")
         else:
             print("Warning: Maximum number of allowed refinements reached without all source cells hit.")
-
         return GMesh_list
 
+    #@profile
     def sample_source_data_on_target_mesh(self,xs,ys,zs):
         """Returns the array on target mesh with values equal to the nearest-neighbor source point data"""
         # Indexes of nearest xs,ys to each node on the mesh
@@ -318,8 +320,8 @@ class GMesh:
         self.h_min = np.zeros(self.lon.shape)
         self.h_max = np.zeros(self.lon.shape)
 	# Quantities needed for calculating the roughness
-        #self.xm = np.zeros(self.lon.shape)
-        #self.ym = np.zeros(self.lon.shape)
+        self.xm = np.zeros(self.lon.shape)
+        self.ym = np.zeros(self.lon.shape)
         #self.zm = np.zeros(self.lon.shape)
         #self.xxm = np.zeros(self.lon.shape)
         #self.yym = np.zeros(self.lon.shape)
@@ -327,8 +329,8 @@ class GMesh:
         #self.xym = np.zeros(self.lon.shape)
         #self.xzm = np.zeros(self.lon.shape)
         #self.yzm = np.zeros(self.lon.shape)
-        #self.xm[:,:] = xs[i[:]]
-        #self.ym[:,:] = ys[j[:]]
+        self.xm[:,:] = xs[i[:]]
+        self.ym[:,:] = ys[j[:]]
         #self.zm[:,:] = zs[j[:],i[:]]
         #self.xxm[:,:] = self.xm[:,:] * self.xm[:,:]
         #self.yym[:,:] = self.ym[:,:] * self.ym[:,:]

@@ -85,9 +85,9 @@ def write_topog(h,hstd,hmin,hmax,xx,yy,fnam=None,format='NETCDF3_CLASSIC',descri
     y[:]=yy
     #global attributes
     if(not no_changing_meta):
-    	fout.history = history
-    	fout.description = description
-    	fout.source =  source
+      fout.history = history
+      fout.description = description
+      fout.source =  source
 
     fout.sync()
     fout.close()
@@ -164,6 +164,7 @@ def extend_by_zeros(x,shape):
     ext[:x.shape[0],:x.shape[1]] = x
     return ext
 
+#@profile
 def do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=8000000, max_refine=32, verbose=1, use_whole_source=True):
     if(verbose): print("  Target sub mesh shape: ",lon.shape)
     target_mesh = GMesh.GMesh( lon=lon, lat=lat )
@@ -197,9 +198,8 @@ def do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=8000000, max_refine=32,
     # Refine grid by 2 till all source points are hit
     print("  Refining the target to hit all source points ...")
     Glist = target_mesh.refine_loop( topo_lon, topo_lat , max_mb=max_mb, max_stages=max_refine)
-    hits = Glist[-1].source_hits( topo_lon, topo_lat )
+    #hits = Glist[-1].source_hits( topo_lon, topo_lat )
     #print("  non-hit ratio: ",hits.size-hits.sum().astype(int)," / ",hits.size) #hits.size should depend on number of blocks
-
     # Sample the topography on the refined grid
     print("  Sampling the source points on target mesh ...")
     Glist[-1].sample_source_data_on_target_mesh(topo_lon,topo_lat,topo_elv)
@@ -211,9 +211,10 @@ def do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs, max_mb=8000000, max_refine=32,
 
     print("Roughness calculation, simple ")
     D_std = do_roughness_simple(Glist)
-    return Glist[0].height,D_std,Glist[0].h_min,Glist[0].h_max, hits
+    return Glist[0].height,D_std,Glist[0].h_min,Glist[0].h_max #, hits
     
 
+#@profile
 def do_roughness_simple(Glist):
     #Simple Roughness calculation: 
     #   roughness=standard deviation of heights of source points contained/hit in the coarse grid cell
@@ -314,8 +315,18 @@ def do_block(blk,lons,lats,topo_lons,topo_lats,topo_elvs,max_refine):
     lon = lons[blk]
     lat = lats[blk]
     print("Target lon lat extents ",lon[0,0],lon[0,-1],lat[0,0],lat[-1,0])
-    have,hstd,hmin,hmax,hits = do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs,max_refine=max_refine)
-    return blk,have,hstd,hmin,hmax,hits
+    have,hstd,hmin,hmax = do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs,max_refine=max_refine)
+    return blk,have,hstd,hmin,hmax
+
+#@profile
+def read_source_topo(url,vx,vy,ve):
+    # Open a topography dataset, check that the topography is on a uniform grid.
+    topo_data = netCDF4.Dataset(url)
+    # Read coordinates of topography
+    topo_lons = np.array( topo_data.variables[vx][:] )
+    topo_lats = np.array( topo_data.variables[vy][:] )
+    topo_elvs = np.array( topo_data.variables[ve][:,:] )
+    return topo_lons,topo_lats,topo_elvs
 
 def usage(scriptbasename):
     print(scriptbasename + ' --hgridfilename <input_hgrid_filepath> --outputfilename <output_topog_filepath>  [--plot --no_changing_meta --open_channels]')
@@ -404,29 +415,7 @@ def main(argv):
     #Time it
     tic = time.perf_counter()
     # # Open and read the topographic dataset
-    # Open a topography dataset, check that the topography is on a uniform grid.
-    topo_data = netCDF4.Dataset(url)
-
-    # Read coordinates of topography
-    topo_lons = np.array( topo_data.variables[vx][:] )
-    topo_lats = np.array( topo_data.variables[vy][:] )
-    topo_elvs = np.array( topo_data.variables[ve][:,:] )
-
-    #Fix the topography to open some channels
-    if(open_channels):
-        #Bosporus mouth at Marmara Sea (29.03,41.04)
-        j0,i0=15724,39483 #get_indices1D(topo_lons, topo_lats ,29.03, 41.04)
-        #One grid cell thick (not survived ice9)
-        #topo_elvs[j0,i0]=topo_elvs[j0,i0-1]
-        #topo_elvs[j0+1,i0+2]=topo_elvs[j0+1,i0+1]
-        #topo_elvs[j0+3,i0+3]=topo_elvs[j0+3,i0+2]
-        #wide channel
-        j2,i2=15756, 39492 #get_indices1D(topo_lons, topo_lats ,29.1, 41.3)
-        topo_elvs[j0-10:j2,i0-10:i2+10]=topo_elvs[j0,i0-1]
-
-        #Dardanells' constrict
-        j1,i1=15616, 39166 #get_indices1D(topo_lons, topo_lats ,26.39, 40.14)
-        topo_elvs[j1+1,i1]=topo_elvs[j1,i1]
+    topo_lons,topo_lats,topo_elvs = read_source_topo(url,vx,vy,ve)
     #Read a target grid
     targ_grid =  netCDF4.Dataset(gridfilename)
     targ_lon = np.array(targ_grid.variables['x'])
@@ -473,18 +462,15 @@ def main(argv):
     Hstdlist=[0]*nxblocks
     Hminlist=[0]*nxblocks
     Hmaxlist=[0]*nxblocks
-    hitslist=[0]*nxblocks
     for blk in range(0,nxblocks):
         lon = lons[blk]
         lat = lats[blk]
         print("  Doing block number ",blk+1," of ",nxblocks," of shape ",lon.shape," ................")
-        block,h,hstd,hmin,hmax,hits = do_block(blk,lons,lats,topo_lons,topo_lats,topo_elvs,max_refine)
-        #do_RSC(lon,lat,topo_lons,topo_lats,topo_elvs,max_refine)
+        block,h,hstd,hmin,hmax = do_block(blk,lons,lats,topo_lons,topo_lats,topo_elvs,max_refine)
         Hlist[block]=h
         Hstdlist[block]=hstd
         Hminlist[block]=hmin
         Hmaxlist[block]=hmax
-        hitslist[block]=hits
 
     print(" Merging the blocks ...")
     height_refsamp = undo_break_array_to_blocks(Hlist,nxblocks,halo)
