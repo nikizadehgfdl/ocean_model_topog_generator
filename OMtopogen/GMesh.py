@@ -39,8 +39,6 @@ def pfactor(n):
             return [ n ]
     return [ n ]
 
-from numba import int32, float32    # import the types
-from numba.experimental import jitclass
 
 class GMesh:
     """Describes 2D meshes for ESMs.
@@ -295,14 +293,16 @@ class GMesh:
             lon_tgt, lat_tgt = self.lon, self.lat
         nn_i,nn_j = eds.indices( lon_tgt, lat_tgt )
         if debug:
-            print('Self lon =',lon[0],'...',lon[-1])
-            print('Self lat =',lat[0],'...',lat[-1])
-            print('Target lon =',lon_tgt)
-            print('Target lat =',lat_tgt)
-            print('Source lon =',lon[nn_i])
-            print('Source lat =',lat[nn_j])
-            print('NN i =',nn_i)
-            print('NN j =',nn_j)
+            print('Target lon min,max =',lon_tgt.min(),lon_tgt.max())
+            print('Target lat min,max =',lat_tgt.min(),lat_tgt.max())
+            nn_i_min,nn_i_max=nn_i.min(),nn_i.max()
+            nn_j_min,nn_j_max=nn_j.min(),nn_j.max()
+            print('Source lon min,max =',eds.lonh[nn_i_min],eds.lonh[nn_i_max])
+            print('Source lat min,max =',eds.lath[nn_j_min],eds.lath[nn_j_max])
+            print('NN i min,max =',nn_i_min,nn_i_max)
+            print('NN j min,max =',nn_j_min,nn_j_max)
+            print('nn_i.shape,nn_j.shape = ',nn_i.shape,nn_j.shape)
+
         assert nn_j.min()>=0, 'Negative j index calculated! j='+str(nn_j.min())
         assert nn_j.max()<eds.nj, 'Out of bounds j index calculated! j='+str(nn_j.max())
         assert nn_i.min()>=0, 'Negative i index calculated! i='+str(nn_i.min())
@@ -313,11 +313,12 @@ class GMesh:
         """Returns an mask array of 1's if a cell with center (xs,ys) is intercepted by a node
            on the mesh, 0 if no node falls in a cell"""
         # Indexes of nearest xs,ys to each node on the mesh
-        i,j = self.find_nn_uniform_source(eds, use_center=use_center)
-        hits = np.zeros((eds.nj,eds.ni))
-        if singularity_radius>0: hits[np.abs(eds.lath)>90-singularity_radius,:] = 1
-        hits[j,i] = 1
-        return hits.sum().astype(int),hits.size,np.all(hits)
+        i,j = self.find_nn_uniform_source(eds, use_center=use_center, debug=True)
+        # Number of source points in this patch
+        n_source_patch=(i.max()-i.min()+1)*(j.max()-j.min()+1)
+        # Number of source points in this patch that are hit
+        n_source_hits=i.size
+        return n_source_hits,n_source_patch,(n_source_hits == n_source_patch)
 
     def _toc(tic, label):
         if tic is not None:
@@ -347,6 +348,8 @@ class GMesh:
             del_lam, del_phi = this.coarsest_resolution(mask_idx=mask_res)
             dellon_t, dellat_t = del_lam.max(), del_phi.max()
             converged = converged or ( (dellon_t<=dellon_s) and (dellat_t<=dellat_s) )
+            if converged:
+                print('Refined grid resolution is less than source grid resolution.')
         if timers: tic = GMesh._toc(gtic, "Set up")
         if verbose:
             print('Refine level', this.rfl, this)
@@ -378,6 +381,8 @@ class GMesh:
                 del_lam, del_phi = this.coarsest_resolution(mask_idx=mask_res)
                 dellon_t, dellat_t = del_lam.max(), del_phi.max()
                 converged = converged or ( (dellon_t<=dellon_s) and (dellat_t<=dellat_s) )
+                if converged:
+                    print('Refined grid resolution is less than source grid resolution.')
                 if timers: stic = GMesh._toc(stic, "calculate resolution stopping criteria")
             GMesh_list.append( this )
             if timers: stic = GMesh._toc(stic, "extending list")
@@ -389,7 +394,7 @@ class GMesh:
 
         if verbose: 
             nhits,sizehit,all_hit = this.source_hits(eds, singularity_radius=singularity_radius)
-            print(' Hit', nhits, 'out of', sizehit, 'cells')
+            print(' Hit', nhits, ' out of ', sizehit, ' cells, ',100.*nhits/sizehit ,' percent')
     
         if not converged and fixed_refine_level<1:
             print("Warning: Maximum number of allowed refinements reached without all source cells hit.")
