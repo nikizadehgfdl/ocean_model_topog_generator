@@ -313,7 +313,7 @@ class GMesh:
         """Returns an mask array of 1's if a cell with center (xs,ys) is intercepted by a node
            on the mesh, 0 if no node falls in a cell"""
         # Indexes of nearest xs,ys to each node on the mesh
-        i,j = self.find_nn_uniform_source(eds, use_center=use_center, debug=True)
+        i,j = self.find_nn_uniform_source(eds, use_center=use_center, debug=False)
         # Number of source points in this patch
         n_source_patch=(i.max()-i.min()+1)*(j.max()-j.min()+1)
         # Number of source points in this patch that are hit
@@ -353,9 +353,6 @@ class GMesh:
         if timers: tic = GMesh._toc(gtic, "Set up")
         if verbose:
             print('Refine level', this.rfl, this)
-            if resolution_limit:
-                print('dx~1/{} dy~1/{}'.format(int(1/dellon_t), int(1/dellat_t)))
-            #print('(%.4f'%mb,'Mb)')
         # Conditions to refine
         # 1) Not all cells are intercepted
         # 2) A refinement intercepted more cells
@@ -369,6 +366,8 @@ class GMesh:
             if timers: tic = GMesh._toc(None, "")
             this = this.refineby2(work_in_3d=work_in_3d)
             if timers: stic = GMesh._toc(tic, "refine by 2")
+            if verbose:
+                print('Refine level', this.rfl, this)
             # Find nearest neighbor indices into source
             if fixed_refine_level<1:
                 nhits,sizehit,all_hit = this.source_hits(eds, singularity_radius=singularity_radius)
@@ -387,16 +386,12 @@ class GMesh:
             GMesh_list.append( this )
             if timers: stic = GMesh._toc(stic, "extending list")
             if timers: tic = GMesh._toc(tic, "Total for loop")
-            if verbose:
-                print('Refine level', this.rfl, this)
-                if resolution_limit:
-                    print('dx~1/{} dy~1/{}'.format(int(1/dellon_t), int(1/dellat_t)), end=" ")
 
-        if verbose: 
+        if verbose:
             nhits,sizehit,all_hit = this.source_hits(eds, singularity_radius=singularity_radius)
             print(' Hit', nhits, ' out of ', sizehit, ' cells, ',100.*nhits/sizehit ,' percent')
     
-        if not converged and fixed_refine_level<1:
+        if not converged:
             print("Warning: Maximum number of allowed refinements reached without all source cells hit.")
         if timers: tic = GMesh._toc(gtic, "Total for whole process")
 
