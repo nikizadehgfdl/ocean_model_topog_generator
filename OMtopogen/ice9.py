@@ -57,7 +57,7 @@ def applyIce9(fileName, nFileName, variable, i0, j0, shallow, analyze):
 
   iRg = Dataset( fileName, 'r' );
   iDepth = iRg.variables[variable] # handle to the variable
-  depth = iDepth[:] # Read the data
+  depth = -iDepth[:] # Read the data
   print( 'Range of input depths: min=',np.amin(depth),'max=',np.amax(depth))
 
   # Open new netcdf file

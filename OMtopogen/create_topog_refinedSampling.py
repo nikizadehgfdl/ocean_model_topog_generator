@@ -147,15 +147,20 @@ def main(hgridfilename,outputfilename,
     tic = time.perf_counter()
     # # Open and read the topographic dataset
     with netCDF4.Dataset(source_file) as nc:
-        topo_lon = nc.variables[source_lon][:].filled(0.)
-        topo_lat = nc.variables[source_lat][:].filled(0.)
-        topo_depth = nc.variables[source_elv][:,:].filled(0.)
-
+        topo_lon = nc.variables[source_lon][:-1:2].filled(0.)
+        topo_lat = nc.variables[source_lat][:-1:2].filled(0.)
+        topo_depth = nc.variables[source_elv][:-1:2,:-1:2].filled(0.)
+    print("source shape: ",topo_depth.shape)
+    print("source lon range: ",topo_lon[0],topo_lon[-1])
+    print("source lat range: ",topo_lat[0],topo_lat[-1])
     src_topo_global = GMesh.UniformEDS( topo_lon, topo_lat, topo_depth )
     #Read a target grid
     with netCDF4.Dataset(hgridfilename) as nc:
         targG = GMesh.GMesh( lon=nc.variables['x'][::2,::2], lat=nc.variables['y'][::2,::2] )
 
+    print("target shape: ",targG.lon.shape)
+    print("target lon range: ",targG.lon[0,0],targG.lon[0,-1])
+    print("target lat range: ",targG.lat[0,0],targG.lat[-1,0])
     #Do the RSC algorithm to deduce depth and roughness
     st = time.time()
     Htarg, H2targ = do_RSC_new(targG,src_topo_global,nxblocks, nyblocks, max_refine)    
