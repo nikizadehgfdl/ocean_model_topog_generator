@@ -55,7 +55,7 @@ ocean_topog.SO.OM4_r3xb2yb2.nc:
 ocean_topog.SO.OM4_r5xb1.nc:
 	time $(TOOL) --hgridfilename $(OM4_025_preprocessing)/antarctic_spherical_supergrid.nc --outputfilename $@ --no_changing_meta
 
-hash.md5.gfdl-lscamd50-d: | $(TARGS)
+hash.md5.gfdl-an105: | $(TARGS)
 	md5sum $(TARGS) > $@
 	cat $@
 
