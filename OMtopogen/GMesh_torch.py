@@ -474,13 +474,13 @@ class RegularCoord:
             ind = torch.remainder( ind, self.n )
         else:
             #ind = np.maximum( 0, np.minimum( self.n - 1, ind ) )
-            #ind = ind.clamp(min=0, max=(self.n - 1) ) #gives wrong results!
-            ind = torch.maximum( torch.tensor([0]), torch.minimum( torch.tensor(self.n - 1), ind ) )
+            ind = ind.clamp(min=0, max=(self.n - 1) ) #gives wrong results!
+            #ind = torch.maximum( torch.tensor([0]), torch.minimum( torch.tensor(self.n - 1), ind ) )
         # Now adjust for subset
         if bound_subset:
             #ind = np.maximum( self.start, np.minimum( self.stop - 1, ind ) ) - self.start
-            #ind = torch.clamp(ind, min=self.start, max= self.stop - 1) - self.start
-            ind = torch.maximum( torch.tensor(self.start), torch.minimum( self.stop - 1, ind ) ) - self.start
+            ind = torch.clamp(ind, min=self.start, max= self.stop - 1) - self.start
+            #ind = torch.maximum( torch.tensor(self.start), torch.minimum( self.stop - 1, ind ) ) - self.start
             assert ind.min() >= 0, "out of range"
             assert ind.max() < self.stop - self.start, "out of range"
         else:
