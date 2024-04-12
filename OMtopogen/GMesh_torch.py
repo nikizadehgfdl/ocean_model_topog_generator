@@ -87,12 +87,12 @@ class GMesh_torch:
             else: raise Exception('lat must be 1D or 2D.')
         if from_cell_center: # Replace cell center coordinates with node coordinates
             ni,nj = ni+1, nj+1
-            tmp = torch.zeros(ni+1)
+            tmp = torch.zeros(ni+1,device)
             tmp[1:-1] = 0.5 * ( lon[:-1] + lon[1:] )
             tmp[0] = 1.5 * lon[0] - 0.5 * lon[1]
             tmp[-1] = 1.5 * lon[-1] - 0.5 * lon[-2]
             lon = tmp
-            tmp = torch.zeros(nj+1)
+            tmp = torch.zeros(nj+1,device)
             tmp[1:-1] = 0.5 * ( lat[:-1] + lat[1:] )
             tmp[0] = 1.5 * lat[0] - 0.5 * lat[1]
             tmp[-1] = 1.5 * lat[-1] - 0.5 * lat[-2]
@@ -116,8 +116,8 @@ class GMesh_torch:
             else:
                 self.lon, self.lat = torch.meshgrid(lon,lat)
         else: # Construct coordinates
-            lon1d = torch.linspace(-90.,90.,nj+1)
-            lat1d = torch.linspace(lon0,lon0+360.,ni+1)
+            lon1d = torch.linspace(-90.,90.,nj+1).to(device)
+            lat1d = torch.linspace(lon0,lon0+360.,ni+1).to(device)
             self.lon, self.lat = torch.meshgrid(lon1d,lat1d)
         if area is not None:
             if area.shape != (nj,ni): raise Exception('area has the wrong shape or size')
@@ -224,13 +224,14 @@ class GMesh_torch:
                 del_lam[jst:jed, ist:ied], del_phi[jst:jed, ist:ied] = 0.0, 0.0
         return del_lam, del_phi
 
-    def refineby2(self, work_in_3d=True):
+    def refineby2(self, work_in_3d=True, device='cpu'):
         """Returns new Mesh instance with twice the resolution"""
 
         def local_refine(A):
             """Retruns a refined variable a with shape (2*nj+1,2*ni+1) by linearly interpolation A with shape (nj+1,ni+1)."""
             nj,ni = A.shape
-            a = torch.zeros( (2*nj-1,2*ni-1) )
+            #pass device to ensure that a remains cuda if A is cuda
+            a = torch.zeros( (2*nj-1,2*ni-1), device=device )
             a[::2,::2] = A[:,:] # Shared nodes
             a[::2,1::2] = 0.5 * ( A[:,:-1] + A[:,1:] ) # Mid-point along i-direction on original mesh
             a[1::2,::2] = 0.5 * ( A[:-1,:] + A[1:,:] ) # Mid-point along j-direction on original mesh
@@ -258,7 +259,7 @@ class GMesh_torch:
         else:
             lon,lat = local_refine(self.lon), local_refine(self.lat)
 
-        return GMesh_torch(lon=lon, lat=lat, rfl=self.rfl+1, device=self.device)
+        return GMesh_torch(lon=lon, lat=lat, rfl=self.rfl+1, device=device)
 
     def rotate(self, y_rot=0, z_rot=0):
         """Sequentially apply a rotation about the Y-axis and then the Z-axis."""
@@ -335,7 +336,8 @@ class GMesh_torch:
         return time.time_ns()
 
     def refine_loop(self, eds, max_stages=32, max_mb=32000, fixed_refine_level=0, work_in_3d=True,
-                    use_center=True, resolution_limit=True, mask_res=[], singularity_radius=0.25, verbose=True, timers=False):
+                    use_center=True, resolution_limit=True, mask_res=[], singularity_radius=0.25, verbose=True, timers=False
+                    ,device='cpu'):
         """Repeatedly refines the mesh until all cells in the source grid are intercepted by mesh nodes.
            Returns a list of the refined meshes starting with parent mesh."""
         if timers: gtic = GMesh_torch._toc(None, "")
@@ -373,7 +375,7 @@ class GMesh_torch:
                and (fixed_refine_level<1) \
               ) or (this.rfl < fixed_refine_level):
             if timers: tic = GMesh_torch._toc(None, "")
-            this = this.refineby2(work_in_3d=work_in_3d)
+            this = this.refineby2(work_in_3d=work_in_3d, device=device)
             if timers: stic = GMesh_torch._toc(tic, "refine by 2")
             if verbose:
                 print('Refine level', this.rfl, this)

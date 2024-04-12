@@ -46,7 +46,7 @@ def rough_opt1( levels, h , device, h2min=1.e-7):
     # The variance of deviations from the plane = <h^2> - <h>^2 - <h*x>^2 - <h*y>^2 given <x>=<y>=0 and <x^2>=<y^2>=1
     return H, H2 - H**2 - HX**2 - HY**2 + torch.tensor((h2min))
 
-def do_RSC_new(targG,src_topo_global, NtileI=1, NtileJ=1, max_refinement=10):
+def do_RSC_new(targG,src_topo_global, NtileI=1, NtileJ=1, max_refinement=10, device='cpu'):
     """Apply the RSC algoritm using a fixed number of refinements max_refinement"""
     di, dj = targG.ni // NtileI, targG.nj // NtileJ
     assert di*NtileI == targG.ni
@@ -59,13 +59,14 @@ def do_RSC_new(targG,src_topo_global, NtileI=1, NtileJ=1, max_refinement=10):
         for i in range(NtileI ):
             csi, si = slice( i*di, (i+1)*di ), slice( i*di, (i+1)*di+1 ) # Slices of target grid
             Hcnt[csj,csi] = Hcnt[csj,csi] + 1 # Diagnostic: counting which cells we are working on
-            G = GMesh_torch.GMesh_torch( lon=targG.lon[sj,si], lat=targG.lat[sj,si] )
+            G = GMesh_torch.GMesh_torch( lon=targG.lon[sj,si], lat=targG.lat[sj,si], device=device)
             print('J,I={},{} {:.1f}%, {}\n   window lon={}:{}, lat={}:{}\n   jslice={}, islice={}'.format( \
                 j, i, 100*(j*NtileI+i)/(NtileI*NtileJ), G, G.lon.min(), G.lon.max(), G.lat.min(), G.lat.max(), sj, si ))
-            levels = G.refine_loop( src_topo_global, resolution_limit=False, fixed_refine_level=max_refinement, timers=False, verbose=False )
+            levels = G.refine_loop(src_topo_global, resolution_limit=False, fixed_refine_level=max_refinement, 
+                                   timers=False, verbose=False, device=device)
             ## Use nearest neighbor topography to populate the finest grid
             levels[-1].project_source_data_onto_target_mesh( src_topo_global)
-            h, h2 = rough( levels, levels[-1].height)
+            h, h2 = rough(levels, levels[-1].height)
             # Store window in final array
             Htarg[csj,csi] = h
             H2targ[csj,csi] = h2
@@ -171,7 +172,7 @@ def main(hgridfilename,outputfilename,
     t_topo_lon=torch.from_numpy(topo_lon).to(device)
     t_topo_lat=torch.from_numpy(topo_lat).to(device)
     t_topo_elv=torch.from_numpy(topo_elv).to(device)
-    src_topo_global = GMesh_torch.UniformEDS( t_topo_lon, t_topo_lat, t_topo_elv, device=device)
+    src_topo_global = GMesh_torch.UniformEDS( t_topo_lon, t_topo_lat, t_topo_elv, device)
     print("source shape: ",src_topo_global.data.shape)
     print("source lon range: ",src_topo_global.lonh[0],src_topo_global.lonh[-1])
     print("source lat range: ",src_topo_global.lath[0],src_topo_global.lath[-1])
@@ -183,7 +184,7 @@ def main(hgridfilename,outputfilename,
     #create the target mesh object that contains the target grid
     t_lon=torch.from_numpy(lon).to(device)
     t_lat=torch.from_numpy(lat).to(device)
-    targG = GMesh_torch.GMesh_torch( lon=t_lon, lat=t_lat, device=device )
+    targG = GMesh_torch.GMesh_torch( lon=t_lon, lat=t_lat, device=device)
 
     print("target shape: ",targG.lon.shape)
     print("target lon range: ",targG.lon[0,0],targG.lon[0,-1])
@@ -191,7 +192,7 @@ def main(hgridfilename,outputfilename,
 
     #Do the RSC algorithm to deduce depth and roughness
     st = time.time()
-    Htarg, H2targ = do_RSC_new(targG,src_topo_global, nxblocks, nyblocks, max_refine)    
+    Htarg, H2targ = do_RSC_new(targG,src_topo_global, nxblocks, nyblocks, max_refine, device=device)    
     et = time.time() - st
     print('RSC loop time:', et, 'seconds')
     
