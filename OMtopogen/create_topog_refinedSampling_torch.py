@@ -14,7 +14,24 @@ def convol( levels, h, f, verbose=False ):
         levels[k].coarsenby2( levels[k-1] )
     return levels[0].height  
 
-def rough( levels, h, h2min=1.e-7 ):
+def rough( levels, h , device, h2min=1.e-7):
+    """Calculates both mean of H, and variance of H relative to a plane"""
+    # Construct weights for moment calculations
+    nx = 2**( len(levels) - 1 )
+    x = ( np.arange(nx) - ( nx - 1 ) /2 ) * np.sqrt( 12 / ( nx**2 - 1 ) ) # This formula satisfies <x>=0 and <x^2>=1
+    x = torch.from_numpy(x).to(device)
+    X, Y = torch.meshgrid( x, x )
+    X, Y = X.reshape(1,nx,1,nx), Y.reshape(1,nx,1,nx)
+    h = torch.reshape(h,(levels[0].nj,nx,levels[0].ni,nx)).to(device) #Why is this not already on device? Input h is on device!
+    # Now calculate moments
+    H2 = convol( levels, h, h ) # mean of h^2
+    HX = convol( levels, h, X ) # mean of h * x
+    HY = convol( levels, h, Y ) # mean of h * y
+    H = convol( levels, h, torch.ones((1,nx,1,nx)).to(device)) # mean of h = mean of h * 1
+    # The variance of deviations from the plane = <h^2> - <h>^2 - <h*x>^2 - <h*y>^2 given <x>=<y>=0 and <x^2>=<y^2>=1
+    return H, H2 - H**2 - HX**2 - HY**2 + torch.tensor((h2min))
+
+def rough0( levels, h, h2min=1.e-7 ):
     """Calculates both mean of H, and variance of H relative to a plane"""
     # Construct weights for moment calculations
     nx = 2**( len(levels) - 1 )
@@ -29,22 +46,6 @@ def rough( levels, h, h2min=1.e-7 ):
     H = convol( levels, h, np.ones((1,nx,1,nx)) ) # mean of h = mean of h * 1
     # The variance of deviations from the plane = <h^2> - <h>^2 - <h*x>^2 - <h*y>^2 given <x>=<y>=0 and <x^2>=<y^2>=1
     return H, H2 - H**2 - HX**2 - HY**2 + h2min
-
-def rough_opt1( levels, h , device, h2min=1.e-7):
-    """Calculates both mean of H, and variance of H relative to a plane"""
-    # Construct weights for moment calculations
-    nx = 2**( len(levels) - 1 )
-    x = ( np.arange(nx) - ( nx - 1 ) /2 ) * np.sqrt( 12 / ( nx**2 - 1 ) ) # This formula satisfies <x>=0 and <x^2>=1
-    X=torch.from_numpy(X).to(device)
-    Y=torch.from_numpy(Y).to(device)
-    h = torch.reshape(h,(levels[0].nj,nx,levels[0].ni,nx)).to(device) #Why is this not already on device? Input h is on device!
-    # Now calculate moments
-    H2 = convol( levels, h, h ) # mean of h^2
-    HX = convol( levels, h, X ) # mean of h * x
-    HY = convol( levels, h, Y ) # mean of h * y
-    H = convol( levels, h, torch.ones((1,nx,1,nx)).to(device)) # mean of h = mean of h * 1
-    # The variance of deviations from the plane = <h^2> - <h>^2 - <h*x>^2 - <h*y>^2 given <x>=<y>=0 and <x^2>=<y^2>=1
-    return H, H2 - H**2 - HX**2 - HY**2 + torch.tensor((h2min))
 
 def do_RSC_new(targG,src_topo_global, NtileI=1, NtileJ=1, max_refinement=10, device='cpu'):
     """Apply the RSC algoritm using a fixed number of refinements max_refinement"""
@@ -66,10 +67,10 @@ def do_RSC_new(targG,src_topo_global, NtileI=1, NtileJ=1, max_refinement=10, dev
                                    timers=False, verbose=False, device=device)
             ## Use nearest neighbor topography to populate the finest grid
             levels[-1].project_source_data_onto_target_mesh( src_topo_global)
-            h, h2 = rough(levels, levels[-1].height)
+            h, h2 = rough(levels, levels[-1].height, device)
             # Store window in final array
-            Htarg[csj,csi] = h
-            H2targ[csj,csi] = h2
+            Htarg[csj,csi] = h.cpu()
+            H2targ[csj,csi] = h2.cpu()
     print( Hcnt.min(), Hcnt.max(), '<-- should both be 1 for full model' )
     return  Htarg, H2targ
     
