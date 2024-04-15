@@ -7,7 +7,7 @@ topog:
   timeout: 1 hours 0 minutes
   script:
   - export PYTHONPATH="/net2/nnz/opt/miniconda/lib/python3.8/site-packages"; export PATH="/net2/nnz/opt/miniconda/bin:$PATH";
-  - ". activate om4labs"
+  - ". activate platforms"
   - which python
   - pwd
   - (cd testing ; make)
