@@ -10,6 +10,6 @@ topog:
   - ". activate platforms"
   - which python
   - pwd
-  - (cd testing ; make)
+  - (cd testing; ln -s /net2/nnz/datasets .datasets ; make)
 variables:
   GIT_STRATEGY: clone
