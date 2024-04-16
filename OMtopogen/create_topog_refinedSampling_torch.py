@@ -61,8 +61,11 @@ def do_RSC_new(targG,src_topo_global, NtileI=1, NtileJ=1, max_refinement=10, dev
             csi, si = slice( i*di, (i+1)*di ), slice( i*di, (i+1)*di+1 ) # Slices of target grid
             Hcnt[csj,csi] = Hcnt[csj,csi] + 1 # Diagnostic: counting which cells we are working on
             G = GMesh_torch.GMesh_torch( lon=targG.lon[sj,si], lat=targG.lat[sj,si], device=device)
-            print('J,I={},{} {:.1f}%, {}\n   window lon={}:{}, lat={}:{}\n   jslice={}, islice={}'.format( \
-                j, i, 100*(j*NtileI+i)/(NtileI*NtileJ), G, G.lon.min(), G.lon.max(), G.lat.min(), G.lat.max(), sj, si ))
+            percent_complete = 100*(j*NtileI+i)/(NtileI*NtileJ)
+            if(percent_complete % 5 > 4.95 or NtileI*NtileJ < 10):
+                 print('{:.1f}% complete, J,I={},{},  window lon={}:{}, lat={}:{}'.format( \
+                       percent_complete, j, i, G.lon.min(), G.lon.max(), G.lat.min(), G.lat.max()))
+                #print('jslice={}, islice={}'.format(sj, si ))
             levels = G.refine_loop(src_topo_global, resolution_limit=False, fixed_refine_level=max_refinement, 
                                    timers=False, verbose=False, device=device)
             ## Use nearest neighbor topography to populate the finest grid

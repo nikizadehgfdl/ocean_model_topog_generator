@@ -114,11 +114,11 @@ class GMesh_torch:
                 self.lon = lon
                 self.lat = lat
             else:
-                self.lon, self.lat = torch.meshgrid(lon,lat)
+                self.lon, self.lat = torch.meshgrid(lon,lat, indexing='ij')
         else: # Construct coordinates
             lon1d = torch.linspace(-90.,90.,nj+1).to(device)
             lat1d = torch.linspace(lon0,lon0+360.,ni+1).to(device)
-            self.lon, self.lat = torch.meshgrid(lon1d,lat1d)
+            self.lon, self.lat = torch.meshgrid(lon1d,lat1d, indexing='ij')
         if area is not None:
             if area.shape != (nj,ni): raise Exception('area has the wrong shape or size')
             self.area = area
@@ -402,8 +402,8 @@ class GMesh_torch:
             nhits,sizehit,all_hit = this.source_hits(eds, singularity_radius=singularity_radius)
             print(' Hit ', nhits, ' out of ', sizehit, ' cells, ',100.*nhits/sizehit ,' percent')
    
-        if not converged:
-            print("Warning: Maximum number of allowed refinements reached without all source cells hit.")
+        #if not converged:
+        #    print("Warning: Maximum number of allowed refinements reached without all source cells hit.")
         if timers: tic = GMesh_torch._toc(gtic, "Total for whole process")
 
         return GMesh_list

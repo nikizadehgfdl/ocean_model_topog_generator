@@ -1,6 +1,6 @@
 #ln -s /home/Niki.Zadeh/datasets .datasets
 TOOL  = ../OMtopogen/create_topog_refinedSampling.py \
-	--source_file .datasets/GEBCO_2020.nc \
+	--source_file .datasets/GEBCO_2023.nc \
         --source_lon lon \
         --source_lat lat \
         --source_elv elevation
@@ -9,13 +9,7 @@ HGRID4deg = .datasets/ocean_hgrid.Merc.4deg.nc
 TARGS = ocean_topog.Merc.4deg_r5xb1.nc \
         ocean_topog.Merc.4deg_r5xb2.nc \
         ocean_topog.Merc.4deg_r5xb3.nc \
-        ocean_topog.Merc.4deg_r5xb30.nc \
-	ocean_topog.SCDP.OM4_r3xb1.nc  \
-	ocean_topog.BP.OM4_r3xb4.nc    \
-	ocean_topog.BP.OM4_r3xb2.nc    \
-	ocean_topog.SO.OM4_r3xb2.nc    \
-	ocean_topog.SO.OM4_r3xb1.nc    \
-	ocean_topog.SO.OM4_r3xb2yb2.nc
+        ocean_topog.Merc.4deg_r5xb30.nc 
 
 all: $(TARGS)
 	cat hash.md5
@@ -55,7 +49,7 @@ ocean_topog.SO.OM4_r3xb2yb2.nc:
 ocean_topog.SO.OM4_r5xb1.nc:
 	time $(TOOL) --hgridfilename $(OM4_025_preprocessing)/antarctic_spherical_supergrid.nc --outputfilename $@ --no_changing_meta
 
-hash.md5.gfdl-an105: | $(TARGS)
+hash.md5.this: | $(TARGS)
 	md5sum $(TARGS) > $@
 	cat $@
 
