@@ -37,19 +37,25 @@ def do_RSC_new(targG,src_topo_global,NtileI=1, NtileJ=1, max_refinement=10):
     print('window size dj,di =',dj,di,'full model nj,ni=',targG.nj, targG.ni)
     Hcnt = np.zeros((targG.nj, targG.ni)) # Diagnostic: counting which cells we are working on
     Htarg, H2targ = np.zeros((targG.nj, targG.ni)), np.zeros((targG.nj, targG.ni))
+    verbose=True #Make it verbose for the first tile
     for j in range(NtileJ ):
         csj, sj = slice( j*dj, (j+1)*dj ), slice( j*dj, (j+1)*dj+1 )
         for i in range(NtileI ):
             csi, si = slice( i*di, (i+1)*di ), slice( i*di, (i+1)*di+1 ) # Slices of target grid
             Hcnt[csj,csi] = Hcnt[csj,csi] + 1 # Diagnostic: counting which cells we are working on
-            G = GMesh.GMesh( lon=targG.lon[sj,si], lat=targG.lat[sj,si] )
-            print('J,I={},{} {:.1f}%, {}\n   window lon={}:{}, lat={}:{}\n   jslice={}, islice={}'.format( \
-                j, i, 100*(j*NtileI+i)/(NtileI*NtileJ), G, G.lon.min(), G.lon.max(), G.lat.min(), G.lat.max(), sj, si ))
-            levels = G.refine_loop( src_topo_global, resolution_limit=True, fixed_refine_level=max_refinement, timers=False )
+            G = GMesh.GMesh( lon=targG.lon[sj,si], lat=targG.lat[sj,si])
+            percent_complete = 100*(j*NtileI+i)/(NtileI*NtileJ)
+            if(percent_complete % 5 > 4.95 or NtileI*NtileJ < 10):
+                 print('{:.1f}% complete, J,I={},{},  window lon={}:{}, lat={}:{}'.format( \
+                       percent_complete, j, i, G.lon.min(), G.lon.max(), G.lat.min(), G.lat.max()))
+                #print('jslice={}, islice={}'.format(sj, si ))
+            levels = G.refine_loop(src_topo_global, resolution_limit=False, fixed_refine_level=max_refinement, 
+                                   timers=False, verbose=verbose)
+            verbose=False
             ## Use nearest neighbor topography to populate the finest grid
-            levels[-1].project_source_data_onto_target_mesh( src_topo_global )
+            levels[-1].project_source_data_onto_target_mesh(src_topo_global)
             ## Now recursively coarsen
-            h, h2 = rough( levels, levels[-1].height )
+            h, h2 = rough(levels, levels[-1].height)
             # Store window in final array
             Htarg[csj,csi] = h
             H2targ[csj,csi] = h2
@@ -145,16 +151,18 @@ def main(hgridfilename,outputfilename,
 
     #Time it
     tic = time.perf_counter()
-    # # Open and read the topographic dataset
+    #Open and read the topographic dataset
     with netCDF4.Dataset(source_file) as nc:
         topo_lon = nc.variables[source_lon][:].filled(0.)
         topo_lat = nc.variables[source_lat][:].filled(0.)
-        topo_depth = nc.variables[source_elv][:,:].filled(0.)
-    print("source shape: ",topo_depth.shape)
-    print("source lon range: ",topo_lon[0],topo_lon[-1])
-    print("source lat range: ",topo_lat[0],topo_lat[-1])
-    src_topo_global = GMesh.UniformEDS( topo_lon, topo_lat, topo_depth )
-    #Read a target grid
+        topo_elv = nc.variables[source_elv][:,:].filled(0.)
+    #Create the topo object that contains the source data
+    src_topo_global = GMesh.UniformEDS(topo_lon, topo_lat, topo_elv)
+    print("source shape: ",src_topo_global.data.shape)
+    print("source lon range: ",src_topo_global.lonh[0],src_topo_global.lonh[-1])
+    print("source lat range: ",src_topo_global.lath[0],src_topo_global.lath[-1])
+
+    #Open and read a target grid
     with netCDF4.Dataset(hgridfilename) as nc:
         targG = GMesh.GMesh( lon=nc.variables['x'][::2,::2], lat=nc.variables['y'][::2,::2] )
 
@@ -163,9 +171,9 @@ def main(hgridfilename,outputfilename,
     print("target lat range: ",targG.lat[0,0],targG.lat[-1,0])
     #Do the RSC algorithm to deduce depth and roughness
     st = time.time()
-    Htarg, H2targ = do_RSC_new(targG,src_topo_global,nxblocks, nyblocks, max_refine)    
+    Htarg, H2targ = do_RSC_new(targG,src_topo_global, nxblocks, nyblocks, max_refine)    
     et = time.time() - st
-    print('Execution time:', et, 'seconds')
+    print('RSC loop time:', et, 'seconds')
     
     #Write the ocean_topog.nc file
     if (outputfilename is None ):

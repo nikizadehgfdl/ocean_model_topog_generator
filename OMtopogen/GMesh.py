@@ -389,10 +389,8 @@ class GMesh:
 
         if verbose:
             nhits,sizehit,all_hit = this.source_hits(eds, singularity_radius=singularity_radius)
-            print(' Hit', nhits, ' out of ', sizehit, ' cells, ',100.*nhits/sizehit ,' percent')
-    
-        if not converged:
-            print("Warning: Maximum number of allowed refinements reached without all source cells hit.")
+            print(' Hit ', nhits, ' out of ', sizehit, ' cells, ',100.*nhits/sizehit ,' percent of data points for this tile.')
+   
         if timers: tic = GMesh._toc(gtic, "Total for whole process")
 
         return GMesh_list
@@ -428,8 +426,10 @@ class RegularCoord:
         if periodic: self.delta, self.rdelta = ( 2 * degppi ) / n, n / ( 2 * degppi )  # Global parameter
         else: self.delta, self.rdelta = degppi / n, n / degppi # Global parameter
         self.origin = origin # Global parameter
-        self.offset = np.floor( self.rdelta * self.origin ).astype(int) # Global parameter
-        self.rem = np.mod( self.rdelta * self.origin, 1 ) # Global parameter ( needed for odd n)
+        a=self.rdelta * self.origin
+        self.offset = np.floor( a ).astype(int) # Global parameter 
+        self.rem = np.mod( a, 1 ) # Global parameter ( needed for odd n)
+
         self.start = 0 # Special for each subset
         self.stop = self.n # Special for each subset
     def __repr__( self ):

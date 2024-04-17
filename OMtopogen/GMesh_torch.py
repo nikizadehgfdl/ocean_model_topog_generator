@@ -354,10 +354,8 @@ class GMesh_torch:
         mb = 2*8*this.shape[0]*this.shape[1]/1024/1024
         if resolution_limit:
             dellon_s, dellat_s = eds.spacing()
-            #print("dellon_s.type: ",dellon_s.type(),dellat_s.type())
             del_lam, del_phi = this.coarsest_resolution(mask_idx=mask_res)
             dellon_t, dellat_t = del_lam.max(), del_phi.max()
-            #print("dellon_t.type: ",dellon_t.type(),dellat_t.type())
             converged = converged or ( (dellon_t<=dellon_s) and (dellat_t<=dellat_s) )
             if converged:
                 print('Refined grid resolution is less than source grid resolution.')
@@ -400,10 +398,8 @@ class GMesh_torch:
 
         if verbose:
             nhits,sizehit,all_hit = this.source_hits(eds, singularity_radius=singularity_radius)
-            print(' Hit ', nhits, ' out of ', sizehit, ' cells, ',100.*nhits/sizehit ,' percent')
+            print(' Hit ', nhits, ' out of ', sizehit, ' cells, ',100.*nhits/sizehit ,' percent of data points for this tile.')
    
-        #if not converged:
-        #    print("Warning: Maximum number of allowed refinements reached without all source cells hit.")
         if timers: tic = GMesh_torch._toc(gtic, "Total for whole process")
 
         return GMesh_list
@@ -441,11 +437,8 @@ class RegularCoord:
         self.origin = origin # Global parameter
         a=self.rdelta * self.origin
         self.offset = np.floor( a ).astype(int) # Global parameter 
-                        #can't convert cuda:0 device type tensor to numpy. Use Tensor.cpu() to copy the tensor to host memory first.
-        #self.offset = torch.floor(a).int() #floor(): argument 'input' (position 1) must be Tensor, not float
-        #print("offset", self.offset)
         self.rem = np.mod( a, 1 ) # Global parameter ( needed for odd n)
-        #self.rem = torch.remainder(a, 1)
+
         self.start = 0 # Special for each subset
         self.stop = self.n # Special for each subset
     def __repr__( self ):
@@ -467,8 +460,6 @@ class RegularCoord:
         If RegularCoord is a subset, then "x" will be clipped to the bounds of the subset (after periodic wrapping).
         if "bound_subset" is True, then limit indices to the range of the subset
         """
-        #ind = np.floor( self.rdelta * np.array(x) - self.rem ).astype(int) - self.offset
-        #ind = torch.floor( self.rdelta * torch.array(x) - self.rem ).astype(int) - self.offset
         y=torch.asarray(x)
         ind = torch.floor( self.rdelta * y - self.rem ).int() - self.offset
         # Apply global bounds
@@ -501,8 +492,7 @@ class UniformEDS:
         self.nj = len(lat)
         # Store coordinates for posterity
         self.lonh, self.lath = lon, lat
-        #print("self.lonh lath", self.lonh.type(),self.lath.type())
-    
+
         if elevation is None: # When creating a subset, we temporarily allow the creation of a "blank" UniformEDS
             self.lon_coord, self.lat_coord = None, None
             self.lonq, self.latq = None, None
@@ -523,14 +513,11 @@ class UniformEDS:
             self.lonq = lonq.to(device) + lon0
             latq = dlat * ( torch.arange( self.nj + 1 ) - 0.5 * self.nj )
             self.latq = latq.to(device)
-            #print("self.lonq latq", self.lonq.type(),self.latq.type())
             sdlon = torch.tensor([360. / self.ni])
             sdlat = torch.tensor([180. / self.nj])
             self.dlon = sdlon.to(device)
             self.dlat = sdlat.to(device)
-            #print("self.dlon dlat type: ",self.dlon.type(),self.dlat.type())
             self.data = elevation
-            #print("self.data type: ",self.data.type())
     def __repr__( self ):
         mem = ( self.ni * self.nj + self.ni + self.nj ) * 8 / 1024 / 1024 / 1024 # Gb
         return '<UniformEDS {} x {} ({:.3f}Gb)\nlon = {}\nh:{}\nq:{}\nlat = {}\nh:{}\nq:{}\ndata.shape = {}\ndata = {}>'.format( \

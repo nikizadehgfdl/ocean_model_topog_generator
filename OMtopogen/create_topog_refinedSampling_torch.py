@@ -20,7 +20,7 @@ def rough( levels, h , device, h2min=1.e-7):
     nx = 2**( len(levels) - 1 )
     x = ( np.arange(nx) - ( nx - 1 ) /2 ) * np.sqrt( 12 / ( nx**2 - 1 ) ) # This formula satisfies <x>=0 and <x^2>=1
     x = torch.from_numpy(x).to(device)
-    X, Y = torch.meshgrid( x, x )
+    X, Y = torch.meshgrid(x, x, indexing='ij')
     X, Y = X.reshape(1,nx,1,nx), Y.reshape(1,nx,1,nx)
     h = torch.reshape(h,(levels[0].nj,nx,levels[0].ni,nx)).to(device) #Why is this not already on device? Input h is on device!
     # Now calculate moments
@@ -31,22 +31,6 @@ def rough( levels, h , device, h2min=1.e-7):
     # The variance of deviations from the plane = <h^2> - <h>^2 - <h*x>^2 - <h*y>^2 given <x>=<y>=0 and <x^2>=<y^2>=1
     return H, H2 - H**2 - HX**2 - HY**2 + torch.tensor((h2min))
 
-def rough0( levels, h, h2min=1.e-7 ):
-    """Calculates both mean of H, and variance of H relative to a plane"""
-    # Construct weights for moment calculations
-    nx = 2**( len(levels) - 1 )
-    x = ( np.arange(nx) - ( nx - 1 ) /2 ) * np.sqrt( 12 / ( nx**2 - 1 ) ) # This formula satisfies <x>=0 and <x^2>=1
-    X, Y = np.meshgrid( x, x )
-    X, Y = X.reshape(1,nx,1,nx), Y.reshape(1,nx,1,nx)
-    h = h.reshape(levels[0].nj,nx,levels[0].ni,nx)
-    # Now calculate moments
-    H2 = convol( levels, h, h ) # mean of h^2
-    HX = convol( levels, h, X ) # mean of h * x
-    HY = convol( levels, h, Y ) # mean of h * y
-    H = convol( levels, h, np.ones((1,nx,1,nx)) ) # mean of h = mean of h * 1
-    # The variance of deviations from the plane = <h^2> - <h>^2 - <h*x>^2 - <h*y>^2 given <x>=<y>=0 and <x^2>=<y^2>=1
-    return H, H2 - H**2 - HX**2 - HY**2 + h2min
-
 def do_RSC_new(targG,src_topo_global, NtileI=1, NtileJ=1, max_refinement=10, device='cpu'):
     """Apply the RSC algoritm using a fixed number of refinements max_refinement"""
     di, dj = targG.ni // NtileI, targG.nj // NtileJ
@@ -55,6 +39,7 @@ def do_RSC_new(targG,src_topo_global, NtileI=1, NtileJ=1, max_refinement=10, dev
     print('window size dj,di =',dj,di,'full model nj,ni=',targG.nj, targG.ni)
     Hcnt = np.zeros((targG.nj, targG.ni)) # Diagnostic: counting which cells we are working on
     Htarg, H2targ = np.zeros((targG.nj, targG.ni)), np.zeros((targG.nj, targG.ni))
+    verbose=True #Make it verbose for the first tile
     for j in range(NtileJ ):
         csj, sj = slice( j*dj, (j+1)*dj ), slice( j*dj, (j+1)*dj+1 )
         for i in range(NtileI ):
@@ -67,9 +52,11 @@ def do_RSC_new(targG,src_topo_global, NtileI=1, NtileJ=1, max_refinement=10, dev
                        percent_complete, j, i, G.lon.min(), G.lon.max(), G.lat.min(), G.lat.max()))
                 #print('jslice={}, islice={}'.format(sj, si ))
             levels = G.refine_loop(src_topo_global, resolution_limit=False, fixed_refine_level=max_refinement, 
-                                   timers=False, verbose=False, device=device)
+                                   timers=False, verbose=verbose, device=device)
+            verbose=False
             ## Use nearest neighbor topography to populate the finest grid
-            levels[-1].project_source_data_onto_target_mesh( src_topo_global)
+            levels[-1].project_source_data_onto_target_mesh(src_topo_global)
+            ## Now recursively coarsen
             h, h2 = rough(levels, levels[-1].height, device)
             # Store window in final array
             Htarg[csj,csi] = h.cpu()
@@ -171,8 +158,7 @@ def main(hgridfilename,outputfilename,
         topo_lon = nc.variables[source_lon][:].filled(0.)
         topo_lat = nc.variables[source_lat][:].filled(0.)
         topo_elv = nc.variables[source_elv][:,:].filled(0.)
-    
-    #Create the topo object that contains the source data
+    #Create the topo object that contains the source data on device
     t_topo_lon=torch.from_numpy(topo_lon).to(device)
     t_topo_lat=torch.from_numpy(topo_lat).to(device)
     t_topo_elv=torch.from_numpy(topo_elv).to(device)
