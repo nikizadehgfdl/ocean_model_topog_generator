@@ -317,16 +317,24 @@ class GMesh_torch:
         assert nn_i.max()<eds.ni, 'Out of bounds i index calculated! i='+str(nn_i.max())
         return nn_i,nn_j
 
+    #The implementation of this function is demanding on memory and should be avoided.
     def source_hits(self, eds, use_center=True, singularity_radius=0.25):
         """Returns an mask array of 1's if a cell with center (xs,ys) is intercepted by a node
            on the mesh, 0 if no node falls in a cell"""
         # Indexes of nearest xs,ys to each node on the mesh
         i,j = self.find_nn_uniform_source(eds, use_center=use_center, debug=False)
         # Number of source points in this patch
-        n_source_patch=(i.max()-i.min()+1)*(j.max()-j.min()+1)
-        # Number of source points in this patch that are hit
-        n_source_hits=i.shape[0]*i.shape[1]
-        return n_source_hits,n_source_patch.item(),(n_source_hits == n_source_patch.item())
+        #n_source_patch=(i.max()-i.min()+1)*(j.max()-j.min()+1)
+        # Calculate the number of source points in this patch that are hit
+        #The following algorithm could be very demanding on memory, best avoided
+        #src_shape = eds.data[j.min():j.max()+1,i.min():i.max()+1].shape
+        hits=torch.zeros_like(eds.data[j.min():j.max()+1,i.min():i.max()+1])
+        #print("hits.type ",hits) #device='cuda:0', dtype=torch.int16
+        hits[j-j.min() , i-i.min()] = 1
+        n_source_hits=hits.sum().item()
+        n_source_patch=hits.numel()
+        #print("n_source_patch ", n_source_patch , n_source_hits)
+        return n_source_hits,n_source_patch,(n_source_hits == n_source_patch)
 
     def _toc(tic, label):
         if tic is not None:
@@ -335,9 +343,9 @@ class GMesh_torch:
             else: print( '{:>10}secs : {}'.format( dt / 1000, label) )
         return time.time_ns()
 
-    def refine_loop(self, eds, max_stages=32, max_mb=32000, fixed_refine_level=0, work_in_3d=True,
-                    use_center=True, resolution_limit=True, mask_res=[], singularity_radius=0.25, verbose=True, timers=False
-                    ,device='cpu'):
+    def refine_loop(self, eds, fixed_refine_level=0, resolution_limit=True, 
+                    verbose=True,device='cpu',timers=False,
+                    work_in_3d=True,use_center=True, mask_res=[], singularity_radius=0.25):
         """Repeatedly refines the mesh until all cells in the source grid are intercepted by mesh nodes.
            Returns a list of the refined meshes starting with parent mesh."""
         if timers: gtic = GMesh_torch._toc(None, "")
@@ -347,60 +355,40 @@ class GMesh_torch:
         nhit_converged = False
         converged = False
         prev_hits = nhits
-        if fixed_refine_level<1:
-            nhits,sizehit,all_hit = this.source_hits(eds, use_center=use_center, singularity_radius=singularity_radius)
-            converged = converged or all_hit or (nhits==prev_hits)
-            prev_hits = nhits
-        mb = 2*8*this.shape[0]*this.shape[1]/1024/1024
+        if timers: tic = GMesh_torch._toc(gtic, "Set up")
         if resolution_limit:
             dellon_s, dellat_s = eds.spacing()
-            del_lam, del_phi = this.coarsest_resolution(mask_idx=mask_res)
-            dellon_t, dellat_t = del_lam.max(), del_phi.max()
-            converged = converged or ( (dellon_t<=dellon_s) and (dellat_t<=dellat_s) )
-            if converged:
-                print('Refined grid resolution is less than source grid resolution.')
-        if timers: tic = GMesh_torch._toc(gtic, "Set up")
-        if verbose:
-            print('Refine level', this.rfl, this)
+        #if verbose:
+        #    print('Refine level', this.rfl, this)
         # Conditions to refine
         # 1) Not all cells are intercepted
         # 2) A refinement intercepted more cells
         # 3) [if resolution_limit] Coarsest resolution in each direction is coarser than source.
         #    This avoids the excessive refinement which is essentially extrapolation.
-        while ( (not converged) \
-               and (len(GMesh_list)<max_stages) \
-               and (4*mb<max_mb) \
-               and (fixed_refine_level<1) \
-              ) or (this.rfl < fixed_refine_level):
+        while ( (not converged) and this.rfl < fixed_refine_level):
             if timers: tic = GMesh_torch._toc(None, "")
             this = this.refineby2(work_in_3d=work_in_3d, device=device)
             if timers: stic = GMesh_torch._toc(tic, "refine by 2")
-            if verbose:
-                print('Refine level', this.rfl, this)
-            # Find nearest neighbor indices into source
-            if fixed_refine_level<1:
-                nhits,sizehit,all_hit = this.source_hits(eds, singularity_radius=singularity_radius)
-                if timers: stic = GMesh_torch._toc(stic, "calculate hits on topo grid")
-                converged = converged or (nhits==prev_hits)
-                prev_hits=nhits
-
-            mb = 2*8*this.shape[0]*this.shape[1]/1024/1024
+            #if verbose:
+            #    print('Refine level', this.rfl, this)
             if resolution_limit:
                 del_lam, del_phi = this.coarsest_resolution(mask_idx=mask_res)
                 dellon_t, dellat_t = del_lam.max(), del_phi.max()
                 converged = converged or ( (dellon_t<=dellon_s) and (dellat_t<=dellat_s) )
-                if converged:
-                    print('Refined grid resolution is less than source grid resolution.')
                 if timers: stic = GMesh_torch._toc(stic, "calculate resolution stopping criteria")
             GMesh_list.append( this )
             if timers: stic = GMesh_torch._toc(stic, "extending list")
             if timers: tic = GMesh_torch._toc(tic, "Total for loop")
 
         if verbose:
-            nhits,sizehit,all_hit = this.source_hits(eds, singularity_radius=singularity_radius)
-            print(' Hit ', nhits, ' out of ', sizehit, ' cells, ',100.*nhits/sizehit ,' percent of data points for this tile.')
+           if converged:
+              print('Converged: Refined grid resolution is less than source grid resolution at rfl=',this.rfl)
+           else:
+              #Finding the percentage of source data with the following function is slow and memory demanding!
+              #This call should be avoided except for debugging.
+              nhits,sizehit,all_hit = this.source_hits(eds, singularity_radius=singularity_radius)
+              print('Hit ', nhits, ' out of ', sizehit, ' cells, ',100.*nhits/sizehit ,' percent of data points for this tile.')
    
-        if timers: tic = GMesh_torch._toc(gtic, "Total for whole process")
 
         return GMesh_list
 
