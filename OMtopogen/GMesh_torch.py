@@ -327,13 +327,10 @@ class GMesh_torch:
         #n_source_patch=(i.max()-i.min()+1)*(j.max()-j.min()+1)
         # Calculate the number of source points in this patch that are hit
         #The following algorithm could be very demanding on memory, best avoided
-        #src_shape = eds.data[j.min():j.max()+1,i.min():i.max()+1].shape
         hits=torch.zeros_like(eds.data[j.min():j.max()+1,i.min():i.max()+1])
-        #print("hits.type ",hits) #device='cuda:0', dtype=torch.int16
         hits[j-j.min() , i-i.min()] = 1
         n_source_hits=hits.sum().item()
         n_source_patch=hits.numel()
-        #print("n_source_patch ", n_source_patch , n_source_hits)
         return n_source_hits,n_source_patch,(n_source_hits == n_source_patch)
 
     def _toc(tic, label):
@@ -358,8 +355,6 @@ class GMesh_torch:
         if timers: tic = GMesh_torch._toc(gtic, "Set up")
         if resolution_limit:
             dellon_s, dellat_s = eds.spacing()
-        #if verbose:
-        #    print('Refine level', this.rfl, this)
         # Conditions to refine
         # 1) Not all cells are intercepted
         # 2) A refinement intercepted more cells
@@ -454,14 +449,10 @@ class RegularCoord:
         if self.periodic:
             ind = torch.remainder( ind, self.n )
         else:
-            #ind = np.maximum( 0, np.minimum( self.n - 1, ind ) )
             ind = ind.clamp(min=0, max=(self.n - 1) ) #gives wrong results!
-            #ind = torch.maximum( torch.tensor([0]), torch.minimum( torch.tensor(self.n - 1), ind ) )
         # Now adjust for subset
         if bound_subset:
-            #ind = np.maximum( self.start, np.minimum( self.stop - 1, ind ) ) - self.start
             ind = torch.clamp(ind, min=self.start, max= self.stop - 1) - self.start
-            #ind = torch.maximum( torch.tensor(self.start), torch.minimum( self.stop - 1, ind ) ) - self.start
             assert ind.min() >= 0, "out of range"
             assert ind.max() < self.stop - self.start, "out of range"
         else:

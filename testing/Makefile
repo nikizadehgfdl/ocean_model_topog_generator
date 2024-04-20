@@ -53,16 +53,16 @@ ocean_topog.SO.OM4_r5xb1.nc:
 	time $(TOOL) --hgridfilename $(OM4_025_preprocessing)/antarctic_spherical_supergrid.nc --outputfilename $@ --no_changing_meta
 
 ocean_topog.Merc.4deg_r8xb2.nc:
-	time $(TOOL) --hgridfilename $(HGRID4deg) --nxblocks=2 --max_refine=8 --outputfilename $@ --no_changing_meta
+	time $(TOOL) --hgridfilename $(HGRID4deg) --nxblocks=2 --max_refine=8 --outputfilename $@ --no_changing_meta > $@.stdout
 
 ocean_topog.Merc.4deg_r9xb10.nc:
-	time $(TOOL) --hgridfilename $(HGRID4deg) --nxblocks=10 --max_refine=9 --outputfilename $@ --no_changing_meta
+	time $(TOOL) --hgridfilename $(HGRID4deg) --nxblocks=10 --max_refine=9 --outputfilename $@ --no_changing_meta > $@.stdout
 
 ocean_topog.OM5p25v20240311_r8xb24yb387.nc:
-	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=24 --nyblocks=387 --max_refine=8 --outputfilename $@ --no_changing_meta
+	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=24 --nyblocks=387 --max_refine=8 --outputfilename $@ --no_changing_meta > $@.stdout
 
 ocean_topog.OM5p25v20240311_r8xb24yb129.nc:
-	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=24 --nyblocks=129 --max_refine=8 --outputfilename $@ --no_changing_meta --device cuda
+	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=24 --nyblocks=129 --max_refine=8 --outputfilename $@ --no_changing_meta > $@.stdout
 
 hash.md5.this: | $(TARGS)
 	md5sum $(TARGS) > $@

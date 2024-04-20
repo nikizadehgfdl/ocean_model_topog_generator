@@ -29,7 +29,8 @@ def rough( levels, h, h2min=1.e-7 ):
     # The variance of deviations from the plane = <h^2> - <h>^2 - <h*x>^2 - <h*y>^2 given <x>=<y>=0 and <x^2>=<y^2>=1
     return H, H2 - H**2 - HX**2 - HY**2 + h2min
 
-def do_RSC_new(targG,src_topo_global,NtileI=1, NtileJ=1, max_refinement=10):
+def do_RSC_new(targG,src_topo_global, NtileI=1, NtileJ=1, max_refinement=10, 
+               resolution_limit=False, verbose=False):
     """Apply the RSC algoritm using a fixed number of refinements max_refinement"""
     di, dj = targG.ni // NtileI, targG.nj // NtileJ
     assert di*NtileI == targG.ni
@@ -45,13 +46,11 @@ def do_RSC_new(targG,src_topo_global,NtileI=1, NtileJ=1, max_refinement=10):
             Hcnt[csj,csi] = Hcnt[csj,csi] + 1 # Diagnostic: counting which cells we are working on
             G = GMesh.GMesh( lon=targG.lon[sj,si], lat=targG.lat[sj,si])
             percent_complete = 100*(j*NtileI+i)/(NtileI*NtileJ)
-            if(percent_complete % 5 > 4.95 or NtileI*NtileJ < 10):
+            if(True or percent_complete % 5 > 4.95 or NtileI*NtileJ < 10):
                  print('{:.1f}% complete, J,I={},{},  window lon={}:{}, lat={}:{}'.format( \
                        percent_complete, j, i, G.lon.min(), G.lon.max(), G.lat.min(), G.lat.max()))
-                #print('jslice={}, islice={}'.format(sj, si ))
-            levels = G.refine_loop(src_topo_global, resolution_limit=False, fixed_refine_level=max_refinement, 
-                                   timers=False, verbose=verbose)
-            verbose=False
+            levels = G.refine_loop(src_topo_global, fixed_refine_level=max_refinement,
+                                   resolution_limit=resolution_limit, verbose=verbose, timers=False)
             ## Use nearest neighbor topography to populate the finest grid
             levels[-1].project_source_data_onto_target_mesh(src_topo_global)
             ## Now recursively coarsen
@@ -80,13 +79,6 @@ def write_topog(targH,targH2,targlon,targlat,filename,description=None,history=N
             nc.history = history
             nc.description = description
             nc.source =  source
-
-        #x=nc.createVariable('x','f8',('ny','nx'))
-        #x.units='meters'
-        #x[:]=xx
-        #y=nc.createVariable('y','f8',('ny','nx'))
-        #y.units='meters'
-        #y[:]=yy
 
 def global_meta_info():
     import socket, os, subprocess, datetime, sys
@@ -140,7 +132,7 @@ def global_meta_info():
         
 def main(hgridfilename,outputfilename,
          source_file,source_lon,source_lat,source_elv,
-         ncores,nxblocks,nyblocks,max_refine,no_changing_meta):
+         nxblocks,nyblocks,max_refine,resolution_limit,verbose,no_changing_meta):
 
     desc=''
     hist=''
@@ -171,14 +163,16 @@ def main(hgridfilename,outputfilename,
     print("target lat range: ",targG.lat[0,0],targG.lat[-1,0])
     #Do the RSC algorithm to deduce depth and roughness
     st = time.time()
-    Htarg, H2targ = do_RSC_new(targG,src_topo_global, nxblocks, nyblocks, max_refine)    
+    Htarg, H2targ = do_RSC_new(targG,src_topo_global, nxblocks, nyblocks, max_refine, 
+                               resolution_limit, verbose)    
     et = time.time() - st
     print('RSC loop time:', et, 'seconds')
     
     #Write the ocean_topog.nc file
     if (outputfilename is None ):
         outputfilename='new_topo_OM5_grid_r{}_{}x{}.nc'.format(max_refine,nxblocks, nyblocks )
-    write_topog(Htarg,H2targ,targG.lon,targG.lat,filename=outputfilename,description=desc,history=hist,source=source,no_changing_meta=no_changing_meta)
+    write_topog(Htarg,H2targ,targG.lon,targG.lat,filename=outputfilename,description=desc,
+                history=hist,source=source,no_changing_meta=no_changing_meta)
 
     toc = time.perf_counter()
     print(f"It took {toc - tic:0.4f} seconds on platform ",host)
@@ -199,14 +193,16 @@ if __name__ == "__main__":
                         help="pathname of latitude variable in source topography data file")
     parser.add_argument("--source_elv",type=str,required=False,default="elevation",
                         help="pathname of elevetion variable in source topography data file")
-    parser.add_argument("--ncores",type=int,required=False,default=1,
-                        help="number of cores to be used")
     parser.add_argument("--nxblocks",type=int,required=False,default=1,
                         help="number of i-direction blocks to be used")
     parser.add_argument("--nyblocks",type=int,required=False,default=1,
                         help="number of j-direction blocks to be used")
     parser.add_argument("--max_refine",type=int,required=False,default=10,
                         help="number of refinements to be used")
+    parser.add_argument("--resolution_limit",action="store_true",required=False,default=False,
+                        help="If =True: Stop refinement when refined resoution gets higher than source resolution.")
+    parser.add_argument("--verbose",action="store_true",required=False,default=False,
+                        help="If =True: Increase verbosity of the tool for debugging, may increase timing significantly.")
     parser.add_argument("--no_changing_meta",action="store_true",required=False,default=False,
                         help="do not add any meta data")
 
