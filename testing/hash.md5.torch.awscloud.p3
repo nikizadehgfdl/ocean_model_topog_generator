@@ -1,9 +1,16 @@
 b23bfad004e3fc0ebc93bdb8d47d0c86  ocean_topog.Merc.4deg_r8xb2_torchCPU.nc
-0a389d6fd9523354ce111a6a3c5f5093  ocean_topog.Merc.4deg_r8xb2_torchGPU.nc
+#RSC loop time: 32.898359060287476 seconds
 a0a77b8971bb488a72385c590f70e095  ocean_topog.Merc.4deg_r9xb10_torchCPU.nc
+#RSC loop time: 131.44915747642517 seconds
 99573718ffdfdb7a2a2051158feb3015  ocean_topog.Merc.4deg_r9xb10_torchGPU.nc
+#RSC loop time: 4.38467264175415 seconds
 5835fad772f6de36fabc2a508d7157d3  ocean_topog.OM5p25v20240311_r8xb24yb387_torchGPU.nc
+#RSC loop time: 437.6589505672455 seconds
 5835fad772f6de36fabc2a508d7157d3  ocean_topog.OM5p25v20240311_r8xb24yb129_torchGPU.nc
-e086e7f57556f273aa65f6d2010e7857  ocean_topog.OM5p25v20240311_r8xb24yb387_torchCPU.nc
+#RSC loop time: 494.51630663871765 seconds
+23cc1275a833ff60b5ca23db1d321424  ocean_topog.OM5p25v20240311_r8xb24yb129_rslim_torchGPU.nc
+#RSC loop time: 197.62016320228577 seconds
 df3e3626cbbe2ec8752dff19b23b2d27  ocean_topog.OM4p125_r5xb20yb20_torchGPU.nc
+#RSC loop time: 22.57043766975403 seconds
 7b52eedef5066692d826a55d5247ff85  ocean_topog.OM4p125_r6xb20yb20_torchGPU.nc
+#RSC loop time: 111.63163542747498 seconds

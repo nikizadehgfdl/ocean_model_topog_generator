@@ -15,6 +15,7 @@ TARGS = ocean_topog.Merc.4deg_r8xb2_torchCPU.nc \
 	ocean_topog.Merc.4deg_r9xb10_torchGPU.nc \
 	ocean_topog.OM5p25v20240311_r8xb24yb387_torchGPU.nc \
 	ocean_topog.OM5p25v20240311_r8xb24yb129_torchGPU.nc \
+	ocean_topog.OM5p25v20240311_r8xb24yb129_rslim_torchGPU.nc \
 	ocean_topog.OM4p125_r5xb20yb20_torchGPU.nc \
 	ocean_topog.OM4p125_r6xb20yb20_torchGPU.nc
 
@@ -91,6 +92,9 @@ ocean_topog.OM5p25v20240311_r8xb24yb129_torchGPU.nc:
 	#RSC loop time: 492.560889005661 seconds on awscloudp3
 	#RSC loop time: 494.9000949859619 seconds on awscloudp3
 	#RSC loop time: 489.61901116371155 seconds on awscloudp3 after reducing the output prints
+
+ocean_topog.OM5p25v20240311_r8xb24yb129_rslim_torchGPU.nc:
+	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=24 --nyblocks=129 --max_refine=8 --outputfilename $@ --no_changing_meta --resolution_limit --device cuda > $@.stdout
 
 ocean_topog.OM5p25v20240311_r8xb12yb43_torchGPU.nc:
 	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=12 --nyblocks=43 --max_refine=8 --outputfilename $@ --no_changing_meta --device cuda > $@.stdout
