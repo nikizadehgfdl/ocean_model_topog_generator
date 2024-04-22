@@ -38,7 +38,6 @@ def do_RSC_new(targG,src_topo_global, NtileI=1, NtileJ=1, max_refinement=10,
     print('window size dj,di =',dj,di,'full model nj,ni=',targG.nj, targG.ni)
     Hcnt = np.zeros((targG.nj, targG.ni)) # Diagnostic: counting which cells we are working on
     Htarg, H2targ = np.zeros((targG.nj, targG.ni)), np.zeros((targG.nj, targG.ni))
-    verbose=True #Make it verbose for the first tile
     for j in range(NtileJ ):
         csj, sj = slice( j*dj, (j+1)*dj ), slice( j*dj, (j+1)*dj+1 )
         for i in range(NtileI ):
