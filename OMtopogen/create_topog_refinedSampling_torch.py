@@ -1,7 +1,8 @@
 #!/usr/bin/env python
-import GMesh
+import GMesh_torch
 import netCDF4
 import numpy as np
+import torch
 import argparse
 import time
 
@@ -13,24 +14,25 @@ def convol( levels, h, f, verbose=False ):
         levels[k].coarsenby2( levels[k-1] )
     return levels[0].height  
 
-def rough( levels, h, h2min=1.e-7 ):
+def rough( levels, h , device, h2min=1.e-7):
     """Calculates both mean of H, and variance of H relative to a plane"""
     # Construct weights for moment calculations
     nx = 2**( len(levels) - 1 )
     x = ( np.arange(nx) - ( nx - 1 ) /2 ) * np.sqrt( 12 / ( nx**2 - 1 ) ) # This formula satisfies <x>=0 and <x^2>=1
-    X, Y = np.meshgrid( x, x )
+    x = torch.from_numpy(x).to(device)
+    X, Y = torch.meshgrid(x, x, indexing='ij')
     X, Y = X.reshape(1,nx,1,nx), Y.reshape(1,nx,1,nx)
-    h = h.reshape(levels[0].nj,nx,levels[0].ni,nx)
+    h = torch.reshape(h,(levels[0].nj,nx,levels[0].ni,nx)).to(device) #Why is this not already on device? Input h is on device!
     # Now calculate moments
     H2 = convol( levels, h, h ) # mean of h^2
     HX = convol( levels, h, X ) # mean of h * x
     HY = convol( levels, h, Y ) # mean of h * y
-    H = convol( levels, h, np.ones((1,nx,1,nx)) ) # mean of h = mean of h * 1
+    H = convol( levels, h, torch.ones((1,nx,1,nx)).to(device)) # mean of h = mean of h * 1
     # The variance of deviations from the plane = <h^2> - <h>^2 - <h*x>^2 - <h*y>^2 given <x>=<y>=0 and <x^2>=<y^2>=1
-    return H, H2 - H**2 - HX**2 - HY**2 + h2min
+    return H, H2 - H**2 - HX**2 - HY**2 + torch.tensor((h2min))
 
 def do_RSC_new(targG,src_topo_global, NtileI=1, NtileJ=1, max_refinement=10, 
-               resolution_limit=False, verbose=False):
+               resolution_limit=False, verbose=False, device='cpu'):
     """Apply the RSC algoritm using a fixed number of refinements max_refinement"""
     di, dj = targG.ni // NtileI, targG.nj // NtileJ
     assert di*NtileI == targG.ni
@@ -43,20 +45,20 @@ def do_RSC_new(targG,src_topo_global, NtileI=1, NtileJ=1, max_refinement=10,
         for i in range(NtileI ):
             csi, si = slice( i*di, (i+1)*di ), slice( i*di, (i+1)*di+1 ) # Slices of target grid
             Hcnt[csj,csi] = Hcnt[csj,csi] + 1 # Diagnostic: counting which cells we are working on
-            G = GMesh.GMesh( lon=targG.lon[sj,si], lat=targG.lat[sj,si])
+            G = GMesh_torch.GMesh_torch( lon=targG.lon[sj,si], lat=targG.lat[sj,si], device=device)
             percent_complete = 100*(j*NtileI+i)/(NtileI*NtileJ)
             if(True or percent_complete % 5 > 4.95 or NtileI*NtileJ < 10):
                  print('{:.1f}% complete, J,I={},{},  window lon={}:{}, lat={}:{}'.format( \
                        percent_complete, j, i, G.lon.min(), G.lon.max(), G.lat.min(), G.lat.max()))
             levels = G.refine_loop(src_topo_global, fixed_refine_level=max_refinement,
-                                   resolution_limit=resolution_limit, verbose=verbose, timers=False)
+                                   resolution_limit=resolution_limit, verbose=verbose, device=device, timers=False)
             ## Use nearest neighbor topography to populate the finest grid
             levels[-1].project_source_data_onto_target_mesh(src_topo_global)
             ## Now recursively coarsen
-            h, h2 = rough(levels, levels[-1].height)
+            h, h2 = rough(levels, levels[-1].height, device)
             # Store window in final array
-            Htarg[csj,csi] = h
-            H2targ[csj,csi] = h2
+            Htarg[csj,csi] = h.cpu()
+            H2targ[csj,csi] = h2.cpu()
     print( Hcnt.min(), Hcnt.max(), '<-- should both be 1 for full model' )
     return  Htarg, H2targ
     
@@ -131,7 +133,7 @@ def global_meta_info():
         
 def main(hgridfilename,outputfilename,
          source_file,source_lon,source_lat,source_elv,
-         nxblocks,nyblocks,max_refine,resolution_limit,verbose,no_changing_meta):
+         device,nxblocks,nyblocks,max_refine,resolution_limit,verbose,no_changing_meta):
 
     desc=''
     hist=''
@@ -147,23 +149,32 @@ def main(hgridfilename,outputfilename,
         topo_lon = nc.variables[source_lon][:].filled(0.)
         topo_lat = nc.variables[source_lat][:].filled(0.)
         topo_elv = nc.variables[source_elv][:,:].filled(0.)
-    #Create the topo object that contains the source data
-    src_topo_global = GMesh.UniformEDS(topo_lon, topo_lat, topo_elv)
+    #Create the topo object that contains the source data on device
+    t_topo_lon=torch.from_numpy(topo_lon).to(device)
+    t_topo_lat=torch.from_numpy(topo_lat).to(device)
+    t_topo_elv=torch.from_numpy(topo_elv).to(device)
+    src_topo_global = GMesh_torch.UniformEDS( t_topo_lon, t_topo_lat, t_topo_elv, device)
     print("source shape: ",src_topo_global.data.shape)
     print("source lon range: ",src_topo_global.lonh[0],src_topo_global.lonh[-1])
     print("source lat range: ",src_topo_global.lath[0],src_topo_global.lath[-1])
-
+    
     #Open and read a target grid
     with netCDF4.Dataset(hgridfilename) as nc:
-        targG = GMesh.GMesh( lon=nc.variables['x'][::2,::2], lat=nc.variables['y'][::2,::2] )
+        lon=nc.variables['x'][::2,::2]
+        lat=nc.variables['y'][::2,::2]
+    #create the target mesh object that contains the target grid
+    t_lon=torch.from_numpy(lon).to(device)
+    t_lat=torch.from_numpy(lat).to(device)
+    targG = GMesh_torch.GMesh_torch( lon=t_lon, lat=t_lat, device=device)
 
     print("target shape: ",targG.lon.shape)
     print("target lon range: ",targG.lon[0,0],targG.lon[0,-1])
     print("target lat range: ",targG.lat[0,0],targG.lat[-1,0])
+
     #Do the RSC algorithm to deduce depth and roughness
     st = time.time()
     Htarg, H2targ = do_RSC_new(targG,src_topo_global, nxblocks, nyblocks, max_refine, 
-                               resolution_limit, verbose)    
+                               resolution_limit, verbose, device)    
     et = time.time() - st
     print('RSC loop time:', et, 'seconds')
     
@@ -192,6 +203,8 @@ if __name__ == "__main__":
                         help="pathname of latitude variable in source topography data file")
     parser.add_argument("--source_elv",type=str,required=False,default="elevation",
                         help="pathname of elevetion variable in source topography data file")
+    parser.add_argument("--device",type=str,required=False,default="cpu",
+                        help="Specify if gpu should be used by passing --device cuda")
     parser.add_argument("--nxblocks",type=int,required=False,default=1,
                         help="number of i-direction blocks to be used")
     parser.add_argument("--nyblocks",type=int,required=False,default=1,

@@ -1,20 +1,21 @@
 #!/usr/bin/env python
 
 import numpy as np
+import torch
 import time
 
 def is_coord_uniform(coord, tol=1.e-5):
     """Returns True if the coordinate "coord" is uniform along the first axis, and False otherwise
 
     tol is the allowed fractional variation in spacing, i.e. ( variation in delta ) / delta < tol"""
-    eps = np.finfo( coord.dtype ).eps # Precision of datatype
-    # abscoord = np.abs( coord ) # Magnitude of coordinate values
-    # abscoord = np.maximum( abscoord[1:], abscoord[:-1] ) # Largest magnitude of coordinate used at centers
+    eps = torch.finfo( coord.dtype ).eps # Precision of datatype
+    # abscoord = torch.abs( coord ) # Magnitude of coordinate values
+    # abscoord = torch.maximum( abscoord[1:], abscoord[:-1] ) # Largest magnitude of coordinate used at centers
     # roundoff = eps * abscoord # This is the roundoff error in calculating "coord[1:] - coord[:-1]"
-    delta = np.abs( coord[1:] - coord[:-1] ) # Spacing along first axis
+    delta = torch.abs( coord[1:] - coord[:-1] ) # Spacing along first axis
     roundoff = tol * delta[0] # Assuming delta is approximately uniform, use first value to estimate allowed variance
-    derror = np.abs( delta - delta.flatten()[0] ) # delta should be uniform so delta - delta[0] should be zero
-    return np.all( derror <= roundoff )
+    derror = torch.abs( delta - delta.flatten()[0] ) # delta should be uniform so delta - delta[0] should be zero
+    return torch.all( derror <= roundoff )
 
 def is_mesh_uniform(lon,lat):
     """Returns True if the input grid (lon,lat) is uniform and False otherwise"""
@@ -40,7 +41,7 @@ def pfactor(n):
     return [ n ]
 
 
-class GMesh:
+class GMesh_torch:
     """Describes 2D meshes for ESMs.
 
     Meshes have shape=(nj,ni) cells with (nj+1,ni+1) vertices with coordinates (lon,lat).
@@ -59,7 +60,8 @@ class GMesh:
     area  - area of cells, shape (nj,ni)
     """
 
-    def __init__(self, shape=None, lon=None, lat=None, area=None, lon0=-180., from_cell_center=False, rfl=0):
+    def __init__(self, shape=None, lon=None, lat=None, area=None, lon0=-180., from_cell_center=False, rfl=0,
+                 device='cpu'):
         """Constructor for Mesh:
         shape - shape of cell array, (nj,ni)
         ni    - number of cells in i-direction (last index)
@@ -85,12 +87,12 @@ class GMesh:
             else: raise Exception('lat must be 1D or 2D.')
         if from_cell_center: # Replace cell center coordinates with node coordinates
             ni,nj = ni+1, nj+1
-            tmp = np.zeros(ni+1)
+            tmp = torch.zeros(ni+1,device)
             tmp[1:-1] = 0.5 * ( lon[:-1] + lon[1:] )
             tmp[0] = 1.5 * lon[0] - 0.5 * lon[1]
             tmp[-1] = 1.5 * lon[-1] - 0.5 * lon[-2]
             lon = tmp
-            tmp = np.zeros(nj+1)
+            tmp = torch.zeros(nj+1,device)
             tmp[1:-1] = 0.5 * ( lat[:-1] + lat[1:] )
             tmp[0] = 1.5 * lat[0] - 0.5 * lat[1]
             tmp[-1] = 1.5 * lat[-1] - 0.5 * lat[-2]
@@ -112,11 +114,11 @@ class GMesh:
                 self.lon = lon
                 self.lat = lat
             else:
-                self.lon, self.lat = np.meshgrid(lon,lat)
+                self.lon, self.lat = torch.meshgrid(lon,lat, indexing='ij')
         else: # Construct coordinates
-            lon1d = np.linspace(-90.,90.,nj+1)
-            lat1d = np.linspace(lon0,lon0+360.,ni+1)
-            self.lon, self.lat = np.meshgrid(lon1d,lat1d)
+            lon1d = torch.linspace(-90.,90.,nj+1).to(device)
+            lat1d = torch.linspace(lon0,lon0+360.,ni+1).to(device)
+            self.lon, self.lat = torch.meshgrid(lon1d,lat1d, indexing='ij')
         if area is not None:
             if area.shape != (nj,ni): raise Exception('area has the wrong shape or size')
             self.area = area
@@ -124,9 +126,13 @@ class GMesh:
             self.area = None
 
         self.rfl = rfl #refining level
-
+        self.device = device
+        self.lon = (self.lon).to(self.device)
+        self.lat = (self.lat).to(self.device)
+        #self.area = (self.area).to(self.device)  
+    
     def __copy__(self):
-        return GMesh(shape = self.shape, lon=self.lon, lat=self.lat, area=self.area)
+        return GMesh_torch(shape = self.shape, lon=self.lon, lat=self.lat, area=self.area)
     def copy(self):
         """Returns new instance with copied values"""
         return self.__copy__()
@@ -157,19 +163,19 @@ class GMesh:
 
     def __lonlat_to_XYZ(lon, lat):
         """Private method. Returns 3d coordinates (X,Y,Z) of spherical coordiantes (lon,lat)."""
-        deg2rad = np.pi/180.
+        deg2rad = torch.pi/180.
         lonr,latr = deg2rad*lon, deg2rad*lat
-        return np.cos( latr )*np.cos( lonr ), np.cos( latr )*np.sin( lonr ), np.sin( latr )
+        return torch.cos( latr )*torch.cos( lonr ), torch.cos( latr )*torch.sin( lonr ), torch.sin( latr )
 
     def __XYZ_to_lonlat(X, Y, Z):
         """Private method. Returns spherical coordinates (lon,lat) of 3d coordinates (X,Y,Z)."""
-        rad2deg = 180./np.pi
-        lat = np.arcsin( Z ) * rad2deg # -90 .. 90
+        rad2deg = 180./torch.pi
+        lat = torch.arcsin( Z ) * rad2deg # -90 .. 90
         # Normalize X,Y to unit circle
-        sub_roundoff = 2./np.finfo(X[0,0]).max
-        R = 1. / ( np.sqrt(X*X + Y*Y) + sub_roundoff )
-        lon = np.arccos( R*X ) * rad2deg # 0 .. 180
-        lon = np.where( Y>=0, lon, -lon ) # Handle -180 .. 0
+        sub_roundoff = 2./torch.finfo(X[0,0].dtype).max
+        R = 1. / ( torch.sqrt(X*X + Y*Y) + sub_roundoff )
+        lon = torch.arccos( R*X ) * rad2deg # 0 .. 180
+        lon = torch.where( Y>=0, lon, -lon ) # Handle -180 .. 0
         return lon,lat
 
     def interp_center_coords(self, work_in_3d=True):
@@ -181,21 +187,21 @@ class GMesh:
 
         if work_in_3d:
             # Calculate 3d coordinates of nodes (X,Y,Z), Z points along pole, Y=0 at lon=0,180, X=0 at lon=+-90
-            X,Y,Z = GMesh.__lonlat_to_XYZ(self.lon, self.lat)
+            X,Y,Z = GMesh_torch.__lonlat_to_XYZ(self.lon, self.lat)
 
             # Refine mesh in 3d and project onto sphere
             X,Y,Z = mean4(X), mean4(Y), mean4(Z)
-            R = 1. / np.sqrt((X*X + Y*Y) + Z*Z)
+            R = 1. / torch.sqrt((X*X + Y*Y) + Z*Z)
             X,Y,Z = R*X, R*Y, R*Z
 
             # Normalize X,Y to unit circle
-            #sub_roundoff = 2./np.finfo(X[0,0]).max
-            #R = 1. / ( np.sqrt(X*X + Y*Y) + sub_roundoff )
+            #sub_roundoff = 2./torch.finfo(X[0,0]).max
+            #R = 1. / ( torch.sqrt(X*X + Y*Y) + sub_roundoff )
             #X = R * X
             #Y = R * Y
 
             # Convert from 3d to spherical coordinates
-            lon,lat = GMesh.__XYZ_to_lonlat(X, Y, Z)
+            lon,lat = GMesh_torch.__XYZ_to_lonlat(X, Y, Z)
         else:
             lon,lat = mean4(self.lon), mean4(self.lat)
         return lon, lat
@@ -204,27 +210,28 @@ class GMesh:
         """Returns the coarsest resolution at each grid"""
         def mdist(x1, x2):
             """Returns positive distance modulo 360."""
-            return np.minimum(np.mod(x1 - x2, 360.0), np.mod(x2 - x1, 360.0))
+            return torch.minimum(torch.remainder(x1 - x2, 360.0), torch.remainder(x2 - x1, 360.0))
         l, p = self.lon, self.lat
-        del_lam = np.maximum(np.maximum(np.maximum(mdist(l[:-1,:-1], l[:-1,1:]), mdist(l[1:,:-1], l[1:,1:])),
-                                        np.maximum(mdist(l[:-1,:-1], l[1:,:-1]), mdist(l[1:,1:], l[:-1,1:]))),
-                             np.maximum(mdist(l[:-1,:-1], l[1:,1:]), mdist(l[1:,:-1], l[:-1,1:])))
-        del_phi = np.maximum(np.maximum(np.maximum(np.abs(np.diff(p, axis=0))[:,1:], np.abs((np.diff(p, axis=0))[:,:-1])),
-                                        np.maximum(np.abs(np.diff(p, axis=1))[1:,:], np.abs((np.diff(p, axis=1))[:-1,:]))),
-                             np.maximum(np.abs(p[:-1,:-1]-p[1:,1:]), np.abs(p[1:,:-1]-p[:-1,1:])))
+        del_lam = torch.maximum(torch.maximum(torch.maximum(mdist(l[:-1,:-1], l[:-1,1:]), mdist(l[1:,:-1], l[1:,1:])),
+                                        torch.maximum(mdist(l[:-1,:-1], l[1:,:-1]), mdist(l[1:,1:], l[:-1,1:]))),
+                             torch.maximum(mdist(l[:-1,:-1], l[1:,1:]), mdist(l[1:,:-1], l[:-1,1:])))
+        del_phi = torch.maximum(torch.maximum(torch.maximum(torch.abs(torch.diff(p, axis=0))[:,1:], torch.abs((torch.diff(p, axis=0))[:,:-1])),
+                                        torch.maximum(torch.abs(torch.diff(p, axis=1))[1:,:], torch.abs((torch.diff(p, axis=1))[:-1,:]))),
+                             torch.maximum(torch.abs(p[:-1,:-1]-p[1:,1:]), torch.abs(p[1:,:-1]-p[:-1,1:])))
         if len(mask_idx)>0:
             for Js, Je, Is, Ie in mask_idx:
                 jst, jed, ist, ied = Js*(2**self.rfl), Je*(2**self.rfl), Is*(2**self.rfl), Ie*(2**self.rfl)
                 del_lam[jst:jed, ist:ied], del_phi[jst:jed, ist:ied] = 0.0, 0.0
         return del_lam, del_phi
 
-    def refineby2(self, work_in_3d=True):
+    def refineby2(self, work_in_3d=True, device='cpu'):
         """Returns new Mesh instance with twice the resolution"""
 
         def local_refine(A):
             """Retruns a refined variable a with shape (2*nj+1,2*ni+1) by linearly interpolation A with shape (nj+1,ni+1)."""
             nj,ni = A.shape
-            a = np.zeros( (2*nj-1,2*ni-1) )
+            #pass device to ensure that a remains cuda if A is cuda
+            a = torch.zeros( (2*nj-1,2*ni-1), device=device )
             a[::2,::2] = A[:,:] # Shared nodes
             a[::2,1::2] = 0.5 * ( A[:,:-1] + A[:,1:] ) # Mid-point along i-direction on original mesh
             a[1::2,::2] = 0.5 * ( A[:-1,:] + A[1:,:] ) # Mid-point along j-direction on original mesh
@@ -233,41 +240,41 @@ class GMesh:
 
         if work_in_3d:
             # Calculate 3d coordinates of nodes (X,Y,Z), Z points along pole, Y=0 at lon=0,180, X=0 at lon=+-90
-            X,Y,Z = GMesh.__lonlat_to_XYZ(self.lon, self.lat)
+            X,Y,Z = GMesh_torch.__lonlat_to_XYZ(self.lon, self.lat)
 
             # Refine mesh in 3d and project onto sphere
             X,Y,Z = local_refine(X), local_refine(Y), local_refine(Z)
-            R = 1. / np.sqrt((X*X + Y*Y) + Z*Z)
+            R = 1. / torch.sqrt((X*X + Y*Y) + Z*Z)
             X,Y,Z = R*X, R*Y, R*Z
 
             # Normalize X,Y to unit circle
-            #sub_roundoff = 2./np.finfo(X[0,0]).max
-            #R = 1. / ( np.sqrt(X*X + Y*Y) + sub_roundoff )
+            #sub_roundoff = 2./torch.finfo(X[0,0]).max
+            #R = 1. / ( torch.sqrt(X*X + Y*Y) + sub_roundoff )
             #X = R * X
             #Y = R * Y
 
             # Convert from 3d to spherical coordinates
-            lon,lat = GMesh.__XYZ_to_lonlat(X, Y, Z)
+            lon,lat = GMesh_torch.__XYZ_to_lonlat(X, Y, Z)
 
         else:
             lon,lat = local_refine(self.lon), local_refine(self.lat)
 
-        return GMesh(lon=lon, lat=lat, rfl=self.rfl+1)
+        return GMesh_torch(lon=lon, lat=lat, rfl=self.rfl+1, device=device)
 
     def rotate(self, y_rot=0, z_rot=0):
         """Sequentially apply a rotation about the Y-axis and then the Z-axis."""
-        deg2rad = np.pi/180.
+        deg2rad = torch.pi/180.
         # Calculate 3d coordinates of nodes (X,Y,Z), Z points along pole, Y=0 at lon=0,180, X=0 at lon=+-90
-        X,Y,Z = GMesh.__lonlat_to_XYZ(self.lon, self.lat)
+        X,Y,Z = GMesh_torch.__lonlat_to_XYZ(self.lon, self.lat)
         # Rotate anti-clockwise about Y-axis
-        C,S = np.cos( deg2rad*y_rot ), np.sin( deg2rad*y_rot )
+        C,S = torch.cos( deg2rad*y_rot ), torch.sin( deg2rad*y_rot )
         X,Z = C*X + S*Z, -S*X + C*Z
         # Rotate anti-clockwise about Y-axis
-        C,S = np.cos( deg2rad*z_rot ), np.sin( deg2rad*z_rot )
+        C,S = torch.cos( deg2rad*z_rot ), torch.sin( deg2rad*z_rot )
         X,Y = C*X - S*Y, S*X + C*Y
 
         # Convert from 3d to spherical coordinates
-        self.lon,self.lat = GMesh.__XYZ_to_lonlat(X, Y, Z)
+        self.lon,self.lat = GMesh_torch.__XYZ_to_lonlat(X, Y, Z)
 
         return self
 
@@ -276,10 +283,10 @@ class GMesh:
         if(self.rfl == 0):
             raise Exception('Coarsest grid, no more coarsening possible!')
 
-        if timers: gtic = GMesh._toc(None, "")
+        if timers: gtic = GMesh_torch._toc(None, "")
         coarser_mesh.height = 0.25 * ( ( self.height[:-1:2,:-1:2] + self.height[1::2,1::2] )
                                      + ( self.height[1::2,:-1:2] + self.height[:-1:2,1::2] ) )
-        if timers: gtic = GMesh._toc(gtic, "Whole process")
+        if timers: gtic = GMesh_torch._toc(gtic, "Whole process")
 
     def find_nn_uniform_source(self, eds, use_center=True, debug=False):
         """Returns the i,j arrays for the indexes of the nearest neighbor centers at (lon,lat) to the self nodes
@@ -291,6 +298,7 @@ class GMesh:
         else:
             # Searching for source cells that the self nodes fall into
             lon_tgt, lat_tgt = self.lon, self.lat
+        
         nn_i,nn_j = eds.indices( lon_tgt, lat_tgt )
         if debug:
             print('Target lon min,max =',lon_tgt.min(),lon_tgt.max())
@@ -319,10 +327,10 @@ class GMesh:
         #n_source_patch=(i.max()-i.min()+1)*(j.max()-j.min()+1)
         # Calculate the number of source points in this patch that are hit
         #The following algorithm could be very demanding on memory, best avoided
-        hits=np.zeros_like(eds.data[j.min():j.max()+1,i.min():i.max()+1])
+        hits=torch.zeros_like(eds.data[j.min():j.max()+1,i.min():i.max()+1])
         hits[j-j.min() , i-i.min()] = 1
-        n_source_hits=hits.sum()
-        n_source_patch=hits.size
+        n_source_hits=hits.sum().item()
+        n_source_patch=hits.numel()
         return n_source_hits,n_source_patch,(n_source_hits == n_source_patch)
 
     def _toc(tic, label):
@@ -337,14 +345,14 @@ class GMesh:
                     work_in_3d=True,use_center=True, mask_res=[], singularity_radius=0.25):
         """Repeatedly refines the mesh until all cells in the source grid are intercepted by mesh nodes.
            Returns a list of the refined meshes starting with parent mesh."""
-        if timers: gtic = GMesh._toc(None, "")
+        if timers: gtic = GMesh_torch._toc(None, "")
         GMesh_list, this = [self], self
         nhits = 0
         all_hit = False
         nhit_converged = False
         converged = False
         prev_hits = nhits
-        if timers: tic = GMesh._toc(gtic, "Set up")
+        if timers: tic = GMesh_torch._toc(gtic, "Set up")
         if resolution_limit:
             dellon_s, dellat_s = eds.spacing()
         # Conditions to refine
@@ -353,19 +361,19 @@ class GMesh:
         # 3) [if resolution_limit] Coarsest resolution in each direction is coarser than source.
         #    This avoids the excessive refinement which is essentially extrapolation.
         while ( (not converged) and this.rfl < fixed_refine_level):
-            if timers: tic = GMesh._toc(None, "")
-            this = this.refineby2(work_in_3d=work_in_3d)
-            if timers: stic = GMesh._toc(tic, "refine by 2")
+            if timers: tic = GMesh_torch._toc(None, "")
+            this = this.refineby2(work_in_3d=work_in_3d, device=device)
+            if timers: stic = GMesh_torch._toc(tic, "refine by 2")
             #if verbose:
             #    print('Refine level', this.rfl, this)
             if resolution_limit:
                 del_lam, del_phi = this.coarsest_resolution(mask_idx=mask_res)
                 dellon_t, dellat_t = del_lam.max(), del_phi.max()
                 converged = converged or ( (dellon_t<=dellon_s) and (dellat_t<=dellat_s) )
-                if timers: stic = GMesh._toc(stic, "calculate resolution stopping criteria")
+                if timers: stic = GMesh_torch._toc(stic, "calculate resolution stopping criteria")
             GMesh_list.append( this )
-            if timers: stic = GMesh._toc(stic, "extending list")
-            if timers: tic = GMesh._toc(tic, "Total for loop")
+            if timers: stic = GMesh_torch._toc(stic, "extending list")
+            if timers: tic = GMesh_torch._toc(tic, "Total for loop")
 
         if verbose:
            if converged:
@@ -381,19 +389,19 @@ class GMesh:
 
     def project_source_data_onto_target_mesh(self, eds, use_center=True, timers=False):
         """Returns the EDS data on the target mesh (self) with values equal to the nearest-neighbor source point data"""
-        if timers: gtic = GMesh._toc(None, "")
+        if timers: gtic = GMesh_torch._toc(None, "")
         if use_center:
-            self.height = np.zeros((self.nj,self.ni))
+            self.height = torch.zeros((self.nj,self.ni))
             tx, ty = self.interp_center_coords(work_in_3d=True)
         else:
-            self.height = np.zeros((self.nj+1,self.ni+1))
+            self.height = torch.zeros((self.nj+1,self.ni+1))
             tx, ty = self.lon, self.lat
-        if timers: tic = GMesh._toc(gtic, "Allocate memory")
+        if timers: tic = GMesh_torch._toc(gtic, "Allocate memory")
         nns_i,nns_j = eds.indices( tx, ty )
-        if timers: tic = GMesh._toc(tic, "Calculate interpolation indexes")
+        if timers: tic = GMesh_torch._toc(tic, "Calculate interpolation indexes")
         self.height[:,:] = eds.data[nns_j[:,:],nns_i[:,:]]
-        if timers: tic = GMesh._toc(tic, "indirect indexing")
-        if timers: tic = GMesh._toc(gtic, "Whole process")
+        if timers: tic = GMesh_torch._toc(tic, "indirect indexing")
+        if timers: tic = GMesh_torch._toc(gtic, "Whole process")
 
 class RegularCoord:
     """Container for uniformly spaced global cell center coordinate parameters
@@ -435,15 +443,16 @@ class RegularCoord:
         If RegularCoord is a subset, then "x" will be clipped to the bounds of the subset (after periodic wrapping).
         if "bound_subset" is True, then limit indices to the range of the subset
         """
-        ind = np.floor( self.rdelta * np.array(x) - self.rem ).astype(int) - self.offset
+        y=torch.asarray(x)
+        ind = torch.floor( self.rdelta * y - self.rem ).int() - self.offset
         # Apply global bounds
         if self.periodic:
-            ind = np.mod( ind, self.n )
+            ind = torch.remainder( ind, self.n )
         else:
-            ind = np.maximum( 0, np.minimum( self.n - 1, ind ) )
+            ind = ind.clamp(min=0, max=(self.n - 1) ) #gives wrong results!
         # Now adjust for subset
         if bound_subset:
-            ind = np.maximum( self.start, np.minimum( self.stop - 1, ind ) ) - self.start
+            ind = torch.clamp(ind, min=self.start, max= self.stop - 1) - self.start
             assert ind.min() >= 0, "out of range"
             assert ind.max() < self.stop - self.start, "out of range"
         else:
@@ -454,7 +463,7 @@ class RegularCoord:
 
 class UniformEDS:
     """Container for a uniform elevation dataset"""
-    def __init__( self, lon, lat, elevation=None ):
+    def __init__( self, lon, lat, elevation=None,device="cpu" ):
         """(lon,lat) are cell centers and 1D with combined shape equalt that of elevation."""
         assert len(lon.shape) == 1, "Longitude must be 1D"
         assert len(lat.shape) == 1, "Latitude must be 1D"
@@ -466,27 +475,32 @@ class UniformEDS:
         if elevation is None: # When creating a subset, we temporarily allow the creation of a "blank" UniformEDS
             self.lon_coord, self.lat_coord = None, None
             self.lonq, self.latq = None, None
-            self.data = np.zeros((0))
+            self.data = torch.zeros((0))
         else: # This is the real constructor
             assert len(lon) == elevation.shape[1], "Inconsistent longitude shape"
             assert len(lat) == elevation.shape[0], "Inconsistent latitude shape"
             dlon, dlat = 360. / self.ni, 180 / self.nj
-            assert np.abs( lon[-1] - lon[0] - 360 + dlon ) < 1.e-5 * dlon, "longitude does not appear to be global"
-            assert np.abs( lat[-1] - lat[0] - 180 + dlat ) < 1.e-5 * dlat, "latitude does not appear to be global"
-            lon0 = np.floor( lon[0] - 0.5 * dlon + 0.5 ) # Calculating the phase this way restricts ourselves to data starting on integer values
-            assert np.abs( lon[0] - 0.5 * dlon - lon0 ) < 1.e-9 * dlon, "edge of longitude is not a round number"
-            assert np.abs( lat[0] - 0.5 * dlat + 90 ) < 1.e-9 * dlat, "edge of latitude is not 90"
-            self.lon_coord = RegularCoord( self.ni, lon0, True)
+            assert torch.abs( lon[-1] - lon[0] - 360 + dlon ) < 1.e-5 * dlon, "longitude does not appear to be global"
+            assert torch.abs( lat[-1] - lat[0] - 180 + dlat ) < 1.e-5 * dlat, "latitude does not appear to be global"
+            lon0 = torch.floor( lon[0] - 0.5 * dlon + 0.5 ) # Calculating the phase this way restricts ourselves to data starting on integer values
+            assert torch.abs( lon[0] - 0.5 * dlon - lon0 ) < 1.e-9 * dlon, "edge of longitude is not a round number"
+            assert torch.abs( lat[0] - 0.5 * dlat + 90 ) < 1.e-9 * dlat, "edge of latitude is not 90"
+            self.lon_coord = RegularCoord( self.ni, lon0.item(), True)
             self.lat_coord = RegularCoord( self.nj, -90, False)
             # Calculate node coordinates for convenient plotting
-            self.lonq = lon0 + dlon * ( np.arange( self.ni + 1 ) )
-            self.latq = dlat * ( np.arange( self.nj + 1 ) - 0.5 * self.nj )
-            self.dlon, self.dlat = 360. / self.ni, 180 / self.nj
+            lonq = dlon * ( torch.arange( self.ni + 1 ) )
+            self.lonq = lonq.to(device) + lon0
+            latq = dlat * ( torch.arange( self.nj + 1 ) - 0.5 * self.nj )
+            self.latq = latq.to(device)
+            sdlon = torch.tensor([360. / self.ni])
+            sdlat = torch.tensor([180. / self.nj])
+            self.dlon = sdlon.to(device)
+            self.dlat = sdlat.to(device)
             self.data = elevation
     def __repr__( self ):
         mem = ( self.ni * self.nj + self.ni + self.nj ) * 8 / 1024 / 1024 / 1024 # Gb
-        return '<UniformEDS {} x {} ({:.3f}Gb)\nlon = {}\nh:{}\nq:{}\nlat = {}\nh:{}\nq:{}\ndata = {}>'.format( \
-            self.ni, self.nj, mem, self.lon_coord, self.lonh, self.lonq, self.lat_coord, self.lath, self.latq, self.data.shape )
+        return '<UniformEDS {} x {} ({:.3f}Gb)\nlon = {}\nh:{}\nq:{}\nlat = {}\nh:{}\nq:{}\ndata.shape = {}\ndata = {}>'.format( \
+            self.ni, self.nj, mem, self.lon_coord, self.lonh, self.lonq, self.lat_coord, self.lath, self.latq, self.data.shape , self.data)
     def spacing( self ):
         """Returns the longitude and latitude spacing"""
         return self.dlon, self.dlat

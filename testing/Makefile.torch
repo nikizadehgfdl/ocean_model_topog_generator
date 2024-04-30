@@ -1,0 +1,123 @@
+#ln -s /home/Niki.Zadeh/datasets .datasets
+TOOL  = ../OMtopogen/create_topog_refinedSampling_torch.py \
+	--source_file .datasets/GEBCO_2023.nc \
+        --source_lon lon \
+        --source_lat lat \
+        --source_elv elevation
+OM4_025_preprocessing = .datasets/OM4p25
+HGRID4deg = .datasets/ocean_hgrid.Merc.4deg.nc
+HGRID_OM5p25 = .datasets/OM5p25v20240311_jpk/ocean_hgrid_OM5p25v20240311.nc
+HGRID_OM4p125 = .datasets/ocean_hgrid_OM4p125v20210310.nc
+
+TARGS = ocean_topog.Merc.4deg_r8xb2_torchCPU.nc \
+	ocean_topog.Merc.4deg_r8xb10_torchGPU.nc \
+	ocean_topog.Merc.4deg_r9xb10_torchCPU.nc \
+	ocean_topog.Merc.4deg_r9xb10_torchGPU.nc \
+	ocean_topog.OM5p25v20240311_r8xb24yb387_torchGPU.nc \
+	ocean_topog.OM5p25v20240311_r8xb24yb129_torchGPU.nc \
+	ocean_topog.OM5p25v20240311_r8xb24yb129_rslim_torchGPU.nc \
+	ocean_topog.OM4p125_r5xb20yb20_torchGPU.nc \
+	ocean_topog.OM4p125_r6xb20yb20_torchGPU.nc
+
+all: $(TARGS)
+	cat hash.md5.torch
+	md5sum -c hash.md5.torch
+
+ocean_topog.Merc.4deg_r5xb1.nc:
+	time $(TOOL) --hgridfilename $(HGRID4deg) --nxblocks=1 --max_refine=5 --outputfilename $@ --no_changing_meta > $@.stdout
+
+ocean_topog.Merc.4deg_r5xb2.nc:
+	time $(TOOL) --hgridfilename $(HGRID4deg) --nxblocks=2 --max_refine=5 --outputfilename $@ --no_changing_meta > $@.stdout
+
+ocean_topog.Merc.4deg_r5xb3.nc:
+	time $(TOOL) --hgridfilename $(HGRID4deg) --nxblocks=3 --max_refine=5 --outputfilename $@ --no_changing_meta > $@.stdout
+
+ocean_topog.Merc.4deg_r5xb30.nc:
+	time $(TOOL) --hgridfilename $(HGRID4deg) --nxblocks=30 --max_refine=5 --outputfilename $@ --no_changing_meta > $@.stdout
+
+ocean_topog.SCDP.OM4_r3xb1.nc:
+	time $(TOOL) --hgridfilename $(OM4_025_preprocessing)/scap_supergrid.nc --nxblocks=1 --max_refine=3 --outputfilename $@ --no_changing_meta > $@.stdout
+
+ocean_topog.BP.OM4_r3xb4.nc:
+	time $(TOOL) --hgridfilename $(OM4_025_preprocessing)/ncap_supergrid.nc --nxblocks=4 --max_refine=3 --outputfilename $@ --no_changing_meta > $@.stdout
+
+ocean_topog.BP.OM4_r3xb2.nc:
+	time $(TOOL) --hgridfilename $(OM4_025_preprocessing)/ncap_supergrid.nc --nxblocks=2 --max_refine=3 --outputfilename $@ --no_changing_meta > $@.stdout
+
+ocean_topog.SO.OM4_r3xb2.nc:
+	time $(TOOL) --hgridfilename $(OM4_025_preprocessing)/antarctic_spherical_supergrid.nc --nxblocks=2 --max_refine=3 --outputfilename $@ --no_changing_meta > $@.stdout
+
+ocean_topog.SO.OM4_r3xb1.nc:
+	time $(TOOL) --hgridfilename $(OM4_025_preprocessing)/antarctic_spherical_supergrid.nc --nxblocks=1 --max_refine=3 --outputfilename $@ --no_changing_meta > $@.stdout
+
+ocean_topog.SO.OM4_r3xb2yb2.nc:
+	time $(TOOL) --hgridfilename $(OM4_025_preprocessing)/antarctic_spherical_supergrid.nc --nxblocks=2 --nyblocks=2 --max_refine=3 --outputfilename $@ --no_changing_meta > $@.stdout
+
+#default nxblocks and max_refine
+ocean_topog.SO.OM4_r5xb1.nc:
+	time $(TOOL) --hgridfilename $(OM4_025_preprocessing)/antarctic_spherical_supergrid.nc --outputfilename $@ --no_changing_meta > $@.stdout
+
+ocean_topog.Merc.4deg_r8xb2_torchCPU.nc:
+	time $(TOOL) --hgridfilename $(HGRID4deg) --nxblocks=2 --max_refine=8 --outputfilename $@ --no_changing_meta > $@.stdout
+
+ocean_topog.Merc.4deg_r8xb2_torchGPU.nc:
+	time $(TOOL) --hgridfilename $(HGRID4deg) --nxblocks=2 --max_refine=8 --outputfilename $@ --no_changing_meta --device cuda > $@.stdout
+
+ocean_topog.Merc.4deg_r8xb10_torchGPU.nc:
+	time $(TOOL) --hgridfilename $(HGRID4deg) --nxblocks=10 --max_refine=8 --outputfilename $@ --no_changing_meta --device cuda > $@.stdout
+
+ocean_topog.Merc.4deg_r9xb10_torchCPU.nc:
+	time $(TOOL) --hgridfilename $(HGRID4deg) --nxblocks=10 --max_refine=9 --outputfilename $@ --no_changing_meta > $@.stdout
+
+ocean_topog.Merc.4deg_r9xb10_torchGPU.nc:
+	time $(TOOL) --hgridfilename $(HGRID4deg) --nxblocks=10 --max_refine=9 --outputfilename $@ --no_changing_meta --device cuda > $@.stdout
+
+ocean_topog.OM5p25v20240311_r8xb24yb387_torchCPU.nc:
+	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=24 --nyblocks=387 --max_refine=8 --outputfilename $@ --no_changing_meta > $@.stdout
+	#RSC loop time: 5606.867709159851 seconds on lscamd50-d
+
+ocean_topog.OM5p25v20240311_r8xb24yb387_torchGPU.nc:
+	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=24 --nyblocks=387 --max_refine=8 --outputfilename $@ --no_changing_meta --device cuda > $@.stdout
+	#RSC loop time: 319.0087862014770 seconds on lscamd50-d
+	#RSC loop time: 437.6589505672455 seconds on awscloudp3
+
+ocean_topog.OM5p25v20240311_r8xb24yb43_torchGPU.nc:
+	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=24 --nyblocks=43 --max_refine=8 --outputfilename $@ --no_changing_meta --device cuda > $@.stdout
+	#RSC loop time: 294.4508442878723 seconds on lscamd50-d
+	#hits GPU max memory on awscloudp3
+
+ocean_topog.OM5p25v20240311_r8xb24yb129_torchGPU.nc:
+	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=24 --nyblocks=129 --max_refine=8 --outputfilename $@ --no_changing_meta --device cuda > $@.stdout
+	#RSC loop time: 489.61901116371155 seconds on awscloudp3
+	#RSC loop time: 314.03074836730957 seconds on lscamd50
+
+ocean_topog.OM5p25v20240311_r8xb24yb129_rslim_torchGPU.nc:
+	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=24 --nyblocks=129 --max_refine=8 --outputfilename $@ --no_changing_meta --resolution_limit --device cuda > $@.stdout
+	#RSC loop time: 197.62016320228577 seconds on awscloudp3
+	#RSC loop time: 133.72903871536255 seconds on lscamd50
+
+ocean_topog.OM5p25v20240311_r8xb12yb43_torchGPU.nc:
+	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=12 --nyblocks=43 --max_refine=8 --outputfilename $@ --no_changing_meta --device cuda > $@.stdout
+	#RSC loop time: 282.3154466152191 seconds
+	#hits GPU max memory on awscloudp3
+
+ocean_topog.OM4p125_r3xb20yb20_torchGPU.nc:
+	time $(TOOL) --hgridfilename $(HGRID_OM4p125) --nxblocks=20 --nyblocks=20 --max_refine=3 --outputfilename $@ --no_changing_meta --device cuda > $@.stdout
+
+ocean_topog.OM4p125_r5xb20yb20_torchGPU.nc:
+	time $(TOOL) --hgridfilename $(HGRID_OM4p125) --nxblocks=20 --nyblocks=20 --max_refine=5 --outputfilename $@ --no_changing_meta --device cuda  > $@.stdout
+
+ocean_topog.OM4p125_r6xb20yb20_torchGPU.nc:
+	time $(TOOL) --hgridfilename $(HGRID_OM4p125) --nxblocks=20 --nyblocks=20 --max_refine=6 --outputfilename $@ --no_changing_meta --device cuda > $@.stdout
+	#RSC loop time:  74.54786610603333 seconds on lscamd50
+	#RSC loop time: 111.63163542747498 seconds on awscloudp3
+
+hash.md5.torch.gfdl-lscamd50-d: | $(TARGS)
+	md5sum $(TARGS) > $@
+	cat $@
+
+check:
+	md5sum -c hash.md5.torch
+
+clean:
+	rm -f $(TARGS) ocean_topog.*.nc
