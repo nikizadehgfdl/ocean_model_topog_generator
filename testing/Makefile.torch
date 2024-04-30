@@ -78,9 +78,8 @@ ocean_topog.OM5p25v20240311_r8xb24yb387_torchCPU.nc:
 
 ocean_topog.OM5p25v20240311_r8xb24yb387_torchGPU.nc:
 	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=24 --nyblocks=387 --max_refine=8 --outputfilename $@ --no_changing_meta --device cuda > $@.stdout
-	#RSC loop time: 343 seconds on lscamd50-d
-	#RSC loop time: 446.4214880466461 seconds on awscloudp3
-	#RSC loop time: 447.39880299568176 seconds on awscloudp3
+	#RSC loop time: 319.0087862014770 seconds on lscamd50-d
+	#RSC loop time: 437.6589505672455 seconds on awscloudp3
 
 ocean_topog.OM5p25v20240311_r8xb24yb43_torchGPU.nc:
 	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=24 --nyblocks=43 --max_refine=8 --outputfilename $@ --no_changing_meta --device cuda > $@.stdout
@@ -89,12 +88,13 @@ ocean_topog.OM5p25v20240311_r8xb24yb43_torchGPU.nc:
 
 ocean_topog.OM5p25v20240311_r8xb24yb129_torchGPU.nc:
 	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=24 --nyblocks=129 --max_refine=8 --outputfilename $@ --no_changing_meta --device cuda > $@.stdout
-	#RSC loop time: 492.560889005661 seconds on awscloudp3
-	#RSC loop time: 494.9000949859619 seconds on awscloudp3
-	#RSC loop time: 489.61901116371155 seconds on awscloudp3 after reducing the output prints
+	#RSC loop time: 489.61901116371155 seconds on awscloudp3
+	#RSC loop time: 314.03074836730957 seconds on lscamd50
 
 ocean_topog.OM5p25v20240311_r8xb24yb129_rslim_torchGPU.nc:
 	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=24 --nyblocks=129 --max_refine=8 --outputfilename $@ --no_changing_meta --resolution_limit --device cuda > $@.stdout
+	#RSC loop time: 197.62016320228577 seconds on awscloudp3
+	#RSC loop time: 133.72903871536255 seconds on lscamd50
 
 ocean_topog.OM5p25v20240311_r8xb12yb43_torchGPU.nc:
 	time $(TOOL) --hgridfilename $(HGRID_OM5p25) --nxblocks=12 --nyblocks=43 --max_refine=8 --outputfilename $@ --no_changing_meta --device cuda > $@.stdout
@@ -109,8 +109,10 @@ ocean_topog.OM4p125_r5xb20yb20_torchGPU.nc:
 
 ocean_topog.OM4p125_r6xb20yb20_torchGPU.nc:
 	time $(TOOL) --hgridfilename $(HGRID_OM4p125) --nxblocks=20 --nyblocks=20 --max_refine=6 --outputfilename $@ --no_changing_meta --device cuda > $@.stdout
+	#RSC loop time:  74.54786610603333 seconds on lscamd50
+	#RSC loop time: 111.63163542747498 seconds on awscloudp3
 
-hash.md5.gfdl-an105: | $(TARGS)
+hash.md5.torch.gfdl-lscamd50-d: | $(TARGS)
 	md5sum $(TARGS) > $@
 	cat $@
 
