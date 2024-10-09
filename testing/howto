@@ -1,0 +1,10 @@
+#lscamd50-d
+ln -s /home/Niki.Zadeh/datasets .datasets
+\rm hash.md5; ln -s hash.md5.torch.gfdl-lscamd50-d hash.md5
+\rm hash.md5.torch; ln -s hash.md5.torch.gfdl-lscamd50-d hash.md5.torch
+module load miniforge
+conda activate plattorch_ext
+make -f Makefile.torch ocean_topog.Merc.4deg_r8xb2_torchCPU.nc
+make -f Makefile.torch check
+or to run all of them
+make -f Makefile.torch
