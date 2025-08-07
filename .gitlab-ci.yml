@@ -10,6 +10,6 @@ topog:
   - conda activate /net2/nnz/opt/miniconda/envs/platforms
   - which python
   - pwd
-  - (cd testing; ln -s /net2/nnz/datasets .datasets ; make)
+  - (cd testing; ln -s /net2/nnz/datasets/topography .datasets ; make)
 variables:
   GIT_STRATEGY: clone
