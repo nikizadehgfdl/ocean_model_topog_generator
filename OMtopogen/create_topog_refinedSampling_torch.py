@@ -14,7 +14,7 @@ def convol( levels, h, f, verbose=False ):
         levels[k].coarsenby2( levels[k-1] )
     return levels[0].height  
 
-def rough( levels, h , device, h2min=1.e-7):
+def rough( levels, h, device, h2min=1.e-7):
     """Calculates both mean of H, and variance of H relative to a plane"""
     # Construct weights for moment calculations
     nx = 2**( len(levels) - 1 )
@@ -27,17 +27,22 @@ def rough( levels, h , device, h2min=1.e-7):
     H2 = convol( levels, h, h ) # mean of h^2
     HX = convol( levels, h, X ) # mean of h * x
     HY = convol( levels, h, Y ) # mean of h * y
-    H = convol( levels, h, torch.ones((1,nx,1,nx)).to(device)) # mean of h = mean of h * 1
+    HM = convol( levels, h, torch.ones((1,nx,1,nx), dtype=torch.float64).to(device)) # mean of h = mean of h * 1
     # The variance of deviations from the plane = <h^2> - <h>^2 - <h*x>^2 - <h*y>^2 given <x>=<y>=0 and <x^2>=<y^2>=1
-    return H, H2 - H**2 - HX**2 - HY**2 + torch.tensor((h2min))
+    #Niki: In the original expression for roughness "H2 - HM**2 - HX**2 - HY**2", both numpy and pytorch were sensitive to 
+    #      the order of HX**2 and HY**2 in the sum. And pytorch would give answers identical to numpy
+    #      only if the order was reversed (i.e., pytorch with "- HY**2 - HX**2" identical answers to numpy with "- HX**2 - HY**2" ).
+    #      In order to keep the answers independent of the order of HX and HY, we can add parentheses around the sums as follows
+    #      which makes numpy and pytorch to give identical answers regardless of the order of HX and HY. 
+    return HM, (H2 - (HM**2 + (HX**2 + HY**2))) + torch.tensor((h2min),dtype=torch.float64).to(device)
 
 def do_RSC_new(targG,src_topo_global, NtileI=1, NtileJ=1, max_refinement=10, 
                resolution_limit=False, verbose=False, device='cpu'):
     """Apply the RSC algoritm using a fixed number of refinements max_refinement"""
     di, dj = targG.ni // NtileI, targG.nj // NtileJ
+    print('window size dj,di =',dj,di,'full model nj,ni=',targG.nj, targG.ni)
     assert di*NtileI == targG.ni
     assert dj*NtileJ == targG.nj
-    print('window size dj,di =',dj,di,'full model nj,ni=',targG.nj, targG.ni)
     Hcnt = np.zeros((targG.nj, targG.ni)) # Diagnostic: counting which cells we are working on
     Htarg, H2targ = np.zeros((targG.nj, targG.ni)), np.zeros((targG.nj, targG.ni))
     for j in range(NtileJ ):
@@ -162,6 +167,9 @@ def main(hgridfilename,outputfilename,
     with netCDF4.Dataset(hgridfilename) as nc:
         lon=nc.variables['x'][::2,::2]
         lat=nc.variables['y'][::2,::2]
+        #Choose a small region of the grid to test
+        #lon=nc.variables['x'][100:500:2,100:500:2]
+        #lat=nc.variables['y'][100:500:2,100:500:2]
     #create the target mesh object that contains the target grid
     t_lon=torch.from_numpy(lon).to(device)
     t_lat=torch.from_numpy(lat).to(device)

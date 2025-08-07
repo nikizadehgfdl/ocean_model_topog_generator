@@ -25,9 +25,14 @@ def rough( levels, h, h2min=1.e-7 ):
     H2 = convol( levels, h, h ) # mean of h^2
     HX = convol( levels, h, X ) # mean of h * x
     HY = convol( levels, h, Y ) # mean of h * y
-    H = convol( levels, h, np.ones((1,nx,1,nx)) ) # mean of h = mean of h * 1
+    HM = convol( levels, h, np.ones((1,nx,1,nx)) ) # mean of h = mean of h * 1
     # The variance of deviations from the plane = <h^2> - <h>^2 - <h*x>^2 - <h*y>^2 given <x>=<y>=0 and <x^2>=<y^2>=1
-    return H, H2 - H**2 - HX**2 - HY**2 + h2min
+    #Niki: In the original expression for roughness "H2 - HM**2 - HX**2 - HY**2", both numpy and pytorch were sensitive to 
+    #      the order of HX**2 and HY**2 in the sum. And pytorch would give answers identical to numpy
+    #      only if the order was reversed (i.e., pytorch with "- HY**2 - HX**2" identical answers to numpy with "- HX**2 - HY**2" ).
+    #      In order to keep the answers independent of the order of HX and HY, we can add parentheses around the sums as follows
+    #      which makes numpy and pytorch to give identical answers regardless of the order of HX and HY.   
+    return HM, (H2 - (HM**2 + (HX**2 + HY**2))) + h2min
 
 def do_RSC_new(targG,src_topo_global, NtileI=1, NtileJ=1, max_refinement=10, 
                resolution_limit=False, verbose=False):
