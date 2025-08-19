@@ -17,6 +17,7 @@ def calculate_file_hash(file_name):
         for key, var in sorted(data_set.variables.items()):
             hash_obj = update_hash_var(var, hash_obj)
             hashList.append(hash_obj.hexdigest())
+            print(hash_obj.hexdigest(), var.name)
         return hashList
 
 if __name__ == "__main__":
