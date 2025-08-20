@@ -87,12 +87,12 @@ class GMesh_torch:
             else: raise Exception('lat must be 1D or 2D.')
         if from_cell_center: # Replace cell center coordinates with node coordinates
             ni,nj = ni+1, nj+1
-            tmp = torch.zeros(ni+1,device)
+            tmp = torch.zeros(ni+1, dtype=torch.float64, device=device)
             tmp[1:-1] = 0.5 * ( lon[:-1] + lon[1:] )
             tmp[0] = 1.5 * lon[0] - 0.5 * lon[1]
             tmp[-1] = 1.5 * lon[-1] - 0.5 * lon[-2]
             lon = tmp
-            tmp = torch.zeros(nj+1,device)
+            tmp = torch.zeros(nj+1, dtype=torch.float64, device=device)
             tmp[1:-1] = 0.5 * ( lat[:-1] + lat[1:] )
             tmp[0] = 1.5 * lat[0] - 0.5 * lat[1]
             tmp[-1] = 1.5 * lat[-1] - 0.5 * lat[-2]
@@ -116,8 +116,8 @@ class GMesh_torch:
             else:
                 self.lon, self.lat = torch.meshgrid(lon,lat, indexing='ij')
         else: # Construct coordinates
-            lon1d = torch.linspace(-90.,90.,nj+1).to(device)
-            lat1d = torch.linspace(lon0,lon0+360.,ni+1).to(device)
+            lon1d = torch.linspace(-90.,90.,nj+1, dtype=torch.float64).to(device)
+            lat1d = torch.linspace(lon0,lon0+360.,ni+1, dtype=torch.float64).to(device)
             self.lon, self.lat = torch.meshgrid(lon1d,lat1d, indexing='ij')
         if area is not None:
             if area.shape != (nj,ni): raise Exception('area has the wrong shape or size')
@@ -231,7 +231,7 @@ class GMesh_torch:
             """Retruns a refined variable a with shape (2*nj+1,2*ni+1) by linearly interpolation A with shape (nj+1,ni+1)."""
             nj,ni = A.shape
             #pass device to ensure that a remains cuda if A is cuda
-            a = torch.zeros( (2*nj-1,2*ni-1), device=device )
+            a = torch.zeros( (2*nj-1,2*ni-1), dtype=torch.float64, device=device )
             a[::2,::2] = A[:,:] # Shared nodes
             a[::2,1::2] = 0.5 * ( A[:,:-1] + A[:,1:] ) # Mid-point along i-direction on original mesh
             a[1::2,::2] = 0.5 * ( A[:-1,:] + A[1:,:] ) # Mid-point along j-direction on original mesh
@@ -391,10 +391,10 @@ class GMesh_torch:
         """Returns the EDS data on the target mesh (self) with values equal to the nearest-neighbor source point data"""
         if timers: gtic = GMesh_torch._toc(None, "")
         if use_center:
-            self.height = torch.zeros((self.nj,self.ni))
+            self.height = torch.zeros((self.nj,self.ni), dtype=torch.float64)
             tx, ty = self.interp_center_coords(work_in_3d=True)
         else:
-            self.height = torch.zeros((self.nj+1,self.ni+1))
+            self.height = torch.zeros((self.nj+1,self.ni+1), dtype=torch.float64)
             tx, ty = self.lon, self.lat
         if timers: tic = GMesh_torch._toc(gtic, "Allocate memory")
         nns_i,nns_j = eds.indices( tx, ty )
@@ -488,12 +488,12 @@ class UniformEDS:
             self.lon_coord = RegularCoord( self.ni, lon0.item(), True)
             self.lat_coord = RegularCoord( self.nj, -90, False)
             # Calculate node coordinates for convenient plotting
-            lonq = dlon * ( torch.arange( self.ni + 1 ) )
+            lonq = dlon * ( torch.arange( self.ni + 1, dtype=torch.float64) )
             self.lonq = lonq.to(device) + lon0
-            latq = dlat * ( torch.arange( self.nj + 1 ) - 0.5 * self.nj )
+            latq = dlat * ( torch.arange( self.nj + 1, dtype=torch.float64) - 0.5 * self.nj )
             self.latq = latq.to(device)
-            sdlon = torch.tensor([360. / self.ni])
-            sdlat = torch.tensor([180. / self.nj])
+            sdlon = torch.tensor([360. / self.ni], dtype=torch.float64)
+            sdlat = torch.tensor([180. / self.nj], dtype=torch.float64)
             self.dlon = sdlon.to(device)
             self.dlat = sdlat.to(device)
             self.data = elevation
