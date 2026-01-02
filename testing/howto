@@ -1,5 +1,5 @@
 #lscamd50-d
-ln -s /home/Niki.Zadeh/datasets .datasets
+ln -s /work/Niki.Zadeh/datasets/topography .datasets
 \rm hash.md5; ln -s hash.md5.torch.gfdl-lscamd50-d hash.md5
 \rm hash.md5.torch; ln -s hash.md5.torch.gfdl-lscamd50-d hash.md5.torch
 module load miniforge
@@ -8,3 +8,10 @@ make -f Makefile.torch ocean_topog.Merc.4deg_r8xb2_torchCPU.nc
 make -f Makefile.torch check
 or to run all of them
 make -f Makefile.torch
+#Quick regression test on PAN an105
+ln -s /work/Niki.Zadeh/datasets/topography .datasets
+\rm hash.md5; ln -s hash.md5.gfdl-pan105 hash.md5
+make ocean_topog.Merc.4deg_r4xb10_NUMPY.nc
+make ocean_topog.Merc.4deg_r4xb10_torchCPU.nc
+make check
+
